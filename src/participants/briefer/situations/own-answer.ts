@@ -1,20 +1,15 @@
-import {
-	ModelMessageItem,
-	SituationContext,
-	SituationHandler,
-	SituationProcessor,
-	SituationSpecification,
-} from "@mozaik-ai/core";
+import { ModelMessageItem, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { resolveRuntime } from "../../../runtime";
+import { SafeProcessor, SafeSpecification } from "../../../safe";
 
-export class OwnAnswerSpecification extends SituationSpecification {
-	isSatisfiedBy(context: SituationContext): boolean {
+export class OwnAnswerSpecification extends SafeSpecification {
+	protected evaluate(context: SituationContext): boolean {
 		return context.event.type === "model.answer" && context.event.producerId === context.participant.getId();
 	}
 }
 
-export class StoreBriefProcessor implements SituationProcessor {
-	apply(context: SituationContext): void {
+export class StoreBriefProcessor extends SafeProcessor {
+	protected run(context: SituationContext): void {
 		const { answer } = context.event.payload as { answer: ModelMessageItem };
 		const brief = answer.content.text.trim();
 

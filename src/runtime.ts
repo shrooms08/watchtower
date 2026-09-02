@@ -1,4 +1,5 @@
 import { defineRuntime, RuntimeState } from "@mozaik-ai/core";
+import type { ChainEventPayload, EventKind } from "./chain-event";
 
 /** Hard global cap on how many runLoop calls the whole run may make. */
 export class InferenceBudget {
@@ -22,9 +23,12 @@ export class InferenceBudget {
 
 export type Incident = {
 	id: string;
+	eventId: string;
 	chain: string;
+	kind: string;
 	summary: string;
 	severity: "low" | "medium" | "high" | "unknown";
+	correlated: boolean;
 };
 
 export type LoggedEvent = {
@@ -33,24 +37,21 @@ export type LoggedEvent = {
 	producer: string;
 };
 
-/** What the analyst dispatched, so an answer can be matched back to a chain. */
-export type PendingAnalysis = {
-	chain: string;
-	txSig: string;
-	kind: string;
-};
-
 export class EnvironmentState extends RuntimeState {
 	readonly incidents: Incident[] = [];
 	readonly eventLog: LoggedEvent[] = [];
-	readonly pendingAnalyses: PendingAnalysis[] = [];
+	/** eventId -> the event that was sent for analysis, for exact correlation. */
+	readonly analysedEvents = new Map<string, ChainEventPayload>();
+	readonly chainEventKinds = new Map<EventKind, number>();
 	brief = "(no brief yet)";
+	analystId = "";
+	lastInferenceActivity = Date.now();
 	chainEventsSeen = 0;
 	skippedNormalCount = 0;
 	dispatchedCount = 0;
 	budgetBlockedCount = 0;
-	analystId = "";
-	lastInferenceActivity = Date.now();
+	parseFailureCount = 0;
+	invalidPayloadCount = 0;
 
 	constructor(public readonly inferenceBudget: InferenceBudget) {
 		super();

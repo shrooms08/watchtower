@@ -1,26 +1,25 @@
-import {
-	Agent,
-	SituationContext,
-	SituationHandler,
-	SituationProcessor,
-	SituationSpecification,
-} from "@mozaik-ai/core";
+import { Agent, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { isolatedInput } from "../../../agent-context";
+import { isChainEventPayload } from "../../../chain-event";
 import { resolveRuntime, runLoop } from "../../../runtime";
-import type { ChainEventPayload } from "../../watcher";
+import { SafeProcessor, SafeSpecification } from "../../../safe";
 
 /**
  * Risky events only, and only while the global budget allows. tryConsume() runs
- * here (not in the processor) so the reservation happens at the same moment the
- * decision is made - two events arriving together cannot both claim the last slot.
+ * in the specification so the reservation happens at the moment of the decision
+ * (MOZAIK-NOTES.md gotcha 16).
  */
-export class RiskyChainEventSpecification extends SituationSpecification {
-	isSatisfiedBy(context: SituationContext): boolean {
+export class RiskyChainEventSpecification extends SafeSpecification {
+	protected evaluate(context: SituationContext): boolean {
 		if (context.event.type !== "chain.event") {
 			return false;
 		}
 
-		const payload = context.event.payload as ChainEventPayload;
+		const payload = context.event.payload;
+
+		if (!isChainEventPayload(payload)) {
+			return false;
+		}
 
 		if (payload.kind === "normal") {
 			return false;
@@ -31,7 +30,7 @@ export class RiskyChainEventSpecification extends SituationSpecification {
 
 		if (!budget.tryConsume()) {
 			state.budgetBlockedCount++;
-			console.log(`[analyst] budget exhausted (${budget.used}/${budget.max}) - logging ${payload.kind}, no inference`);
+			console.log(`[analyst] budget exhausted (${budget.used}/${budget.max}) - logged ${payload.kind}, no inference`);
 			return false;
 		}
 
@@ -39,17 +38,37 @@ export class RiskyChainEventSpecification extends SituationSpecification {
 	}
 }
 
-export class AnalyseEventProcessor implements SituationProcessor {
-	apply(context: SituationContext): void {
+export class AnalyseEventProcessor extends SafeProcessor {
+	protected run(context: SituationContext): void {
 		const agent = context.participant as Agent;
-		const payload = context.event.payload as ChainEventPayload;
+		const payload = context.event.payload;
+
+		if (!isChainEventPayload(payload)) {
+			return;
+		}
+
 		const state = resolveRuntime().state;
 
-		state.pendingAnalyses.push({ chain: payload.chain, txSig: payload.txSig, kind: payload.kind });
+		// Correlation is by eventId, never by arrival order: model.answer carries
+		// no loop id and concurrent loops finish out of order.
+		state.analysedEvents.set(payload.eventId, payload);
 		state.dispatchedCount++;
 
+		const prompt =
+			`eventId: ${payload.eventId}\n` +
+			`event: ${JSON.stringify({
+				chain: payload.chain,
+				kind: payload.kind,
+				txSig: payload.txSig,
+				amountUsd: payload.amountUsd,
+				amountSol: payload.amountSol,
+				wallet: payload.wallet,
+				detail: payload.detail,
+			})}\n` +
+			`Reply ONLY with JSON: {"eventId":"${payload.eventId}","severity":"low"|"medium"|"high","reason":"<one sentence>"}`;
+
 		// Its own loop per event - never queued behind the previous one.
-		runLoop(agent.getId(), `Event: ${JSON.stringify(payload)}`, isolatedInput(agent, 120));
+		runLoop(agent.getId(), prompt, isolatedInput(agent, 200));
 	}
 }
 
@@ -58,22 +77,49 @@ export const riskyChainEventHandler: SituationHandler = {
 	processor: new AnalyseEventProcessor(),
 };
 
-export class NormalChainEventSpecification extends SituationSpecification {
-	isSatisfiedBy(context: SituationContext): boolean {
-		return context.event.type === "chain.event" && (context.event.payload as ChainEventPayload).kind === "normal";
+export class NormalChainEventSpecification extends SafeSpecification {
+	protected evaluate(context: SituationContext): boolean {
+		return (
+			context.event.type === "chain.event" &&
+			isChainEventPayload(context.event.payload) &&
+			context.event.payload.kind === "normal"
+		);
 	}
 }
 
-export class SkipNormalEventProcessor implements SituationProcessor {
-	apply(context: SituationContext): void {
-		const payload = context.event.payload as ChainEventPayload;
+export class SkipNormalEventProcessor extends SafeProcessor {
+	protected run(context: SituationContext): void {
+		const payload = context.event.payload;
+
+		if (!isChainEventPayload(payload)) {
+			return;
+		}
 
 		resolveRuntime().state.skippedNormalCount++;
-		console.log(`[analyst] skipped normal event (${payload.chain} ${payload.txSig.slice(0, 10)}...)`);
+		console.log(`[analyst] skipped normal event (${payload.eventId} ${payload.detail})`);
 	}
 }
 
 export const normalChainEventHandler: SituationHandler = {
 	specification: new NormalChainEventSpecification(),
 	processor: new SkipNormalEventProcessor(),
+};
+
+/** Anything claiming to be a chain.event but not shaped like one. */
+export class MalformedChainEventSpecification extends SafeSpecification {
+	protected evaluate(context: SituationContext): boolean {
+		return context.event.type === "chain.event" && !isChainEventPayload(context.event.payload);
+	}
+}
+
+export class IgnoreMalformedProcessor extends SafeProcessor {
+	protected run(context: SituationContext): void {
+		resolveRuntime().state.invalidPayloadCount++;
+		console.warn(`[analyst] ignored chain.event with unknown payload shape: ${JSON.stringify(context.event.payload)}`);
+	}
+}
+
+export const malformedChainEventHandler: SituationHandler = {
+	specification: new MalformedChainEventSpecification(),
+	processor: new IgnoreMalformedProcessor(),
 };

@@ -322,6 +322,33 @@ What that buys and what it costs:
   `src/report.ts` pairs per producer in arrival order. Peak concurrency itself is exact, because
   sweeping +1/-1 over the log needs no pairing.
 
+## Structured output is broken for Anthropic in 4.0.0-beta.12
+
+`structuredOutput` (the `reference/mozaik-examples/structured-output` pattern) **cannot be used with
+`claude-haiku-4-5`**. `AnthropicMessagesMapper.toRequest` builds
+
+```js
+outputConfig.format = { type: "json_schema", json_schema: inferenceInput.structuredOutput.schema }
+```
+
+and the API rejects it outright:
+
+```
+400 invalid_request_error
+output_config.format: Unexpected key 'json_schema'. The expected format is {"type": "json_schema", "schema": {...}}
+```
+
+The feature exists on the Anthropic side; the mapper just names the field `json_schema` where the API
+wants `schema` — a one-word upstream fix, but it is a hard 400 today and, because `runLoop` never
+awaits, it arrives as an unhandled rejection rather than an error event. The OpenAI path is
+unaffected, which is why every example that uses `structuredOutput` runs `gpt-5.4`.
+
+**Workaround in use:** ask for JSON in the prompt and parse tolerantly (`parseVerdict` in
+`src/chain-event.ts` — tries the raw text, then a ```json fence, then the outermost `{...}`, and
+validates the shape before trusting it). Across live and simulated runs Haiku returned clean JSON
+every time (0 parse failures), but the tolerant path stays because a single malformed answer would
+otherwise poison an incident record.
+
 ## Gotchas
 
 1. **`ParticipantManifest` is declared but not exported.** `import { ParticipantManifest }` fails
@@ -366,3 +393,17 @@ What that buys and what it costs:
     a participant, and the specification is the only place that sees a candidate event before the
     decision is final — that is where a budget reservation belongs, otherwise two events arriving
     together both pass a `hasCapacity()` check and both start loops.
+17. **`structuredOutput` + Anthropic = hard 400** — see the section above. Prompt for JSON instead.
+18. **Correlate by an id you put in the prompt.** Since `model.answer` carries no loop id, the only
+    reliable correlation is to embed a short `eventId` in the prompt, require the model to echo it,
+    and index by it (`state.analysedEvents`). This replaced the FIFO guess and made every incident in
+    both the live and simulated runs correctly attributed (`correlated=true`).
+19. **web3.js v1 keeps its websocket private.** `Connection` exposes no `error`/`close` events, so
+    reconnect logic has to hook `(connection as any)._rpcWebSocket` (guarded - it may not be there)
+    **and** run a staleness watchdog, since a socket that dies quietly produces no event at all.
+20. **A callback handed to `connection.onLogs` must never throw** — it runs inside web3.js's socket
+    dispatch, outside any handler of ours, so `SafeProcessor` does not cover it. Wrap the body.
+21. **The public mainnet RPC held up fine** at 1 sampled `getParsedTransaction` per 3s: two 90s runs
+    against Jupiter v6, ~4,000-4,500 logs each, 29 samples, **zero 429s and zero reconnects**. The
+    websocket firehose is free; only the sampled RPC fetches are rate-limit exposed, so the 1-in-flight
+    + 3s spacing guard is what keeps it safe. Do not raise the sample rate without a paid endpoint.

@@ -1,19 +1,14 @@
-import {
-	Agent,
-	SituationContext,
-	SituationHandler,
-	SituationProcessor,
-	SituationSpecification,
-} from "@mozaik-ai/core";
+import { Agent, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { isolatedInput } from "../../../agent-context";
 import { resolveRuntime, runLoop } from "../../../runtime";
+import { SafeProcessor, SafeSpecification } from "../../../safe";
 
 /**
  * Only the Risk Analyst's answers, never the briefer's own - otherwise every
  * brief would trigger another brief.
  */
-export class AnalystAnsweredSpecification extends SituationSpecification {
-	isSatisfiedBy(context: SituationContext): boolean {
+export class AnalystAnsweredSpecification extends SafeSpecification {
+	protected evaluate(context: SituationContext): boolean {
 		if (context.event.type !== "model.answer") {
 			return false;
 		}
@@ -35,14 +30,21 @@ export class AnalystAnsweredSpecification extends SituationSpecification {
 	}
 }
 
-export class RewriteBriefProcessor implements SituationProcessor {
-	apply(context: SituationContext): void {
+export class RewriteBriefProcessor extends SafeProcessor {
+	protected run(context: SituationContext): void {
 		const agent = context.participant as Agent;
 		const { incidents } = resolveRuntime().state;
+		const summary = incidents.map(({ eventId, chain, kind, severity, summary: reason }) => ({
+			eventId,
+			chain,
+			kind,
+			severity,
+			reason,
+		}));
 
 		runLoop(
 			agent.getId(),
-			`Incidents so far: ${JSON.stringify(incidents)}. Rewrite the ops brief in under 40 words.`,
+			`Incidents so far: ${JSON.stringify(summary)}. Rewrite the ops brief in under 40 words.`,
 			isolatedInput(agent, 160),
 		);
 	}

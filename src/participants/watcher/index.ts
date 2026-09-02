@@ -1,17 +1,8 @@
 import { createHuman, Human, SemanticEvent } from "@mozaik-ai/core";
+import { ChainEventPayload, ChainName, EventKind, newEventId } from "../../chain-event";
 import { sendEvent } from "../../runtime";
 
-export type ChainName = "solana" | "base";
-export type EventKind = "large_transfer" | "authority_change" | "failed_burst" | "normal";
-
-export type ChainEventPayload = {
-	chain: ChainName;
-	txSig: string;
-	kind: EventKind;
-	amountUsd: number;
-	wallet: string;
-	ts: string;
-};
+export type { ChainEventPayload, ChainName, EventKind };
 
 type WatcherConfig = {
 	chain: ChainName;
@@ -69,7 +60,7 @@ function jitter(intervalMs: number): number {
 }
 
 export function createWatcher(chainName: ChainName, intervalMs: number): Human {
-	const name = `${chainName === "solana" ? "Solana" : "Base"} Watcher`;
+	const name = `${chainName === "solana" ? "Solana" : "Base"} Watcher (simulated)`;
 	const watcher = createHuman({ name, capabilities: [], handlers: [] });
 
 	configs.set(watcher.getId(), { chain: chainName, intervalMs, kinds: KIND_PATTERNS[chainName] });
@@ -91,12 +82,14 @@ export function startWatcher(participant: Human, count: number): Promise<void> {
 		const tick = (): void => {
 			const kind = config.kinds[emitted % config.kinds.length]!;
 			const payload: ChainEventPayload = {
+				eventId: newEventId(),
 				chain: config.chain,
 				txSig: fakeTxSig(config.chain),
 				kind,
 				amountUsd: amountFor(kind),
 				wallet: fakeWallet(config.chain),
 				ts: new Date().toISOString(),
+				detail: `simulated ${kind} on ${config.chain}`,
 			};
 
 			sendEvent(SemanticEvent.create("chain.event", participant.getId(), payload), participant.getId());

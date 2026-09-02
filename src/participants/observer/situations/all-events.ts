@@ -6,11 +6,10 @@ import {
 	SemanticEvent,
 	SituationContext,
 	SituationHandler,
-	SituationProcessor,
-	SituationSpecification,
 } from "@mozaik-ai/core";
+import { isChainEventPayload } from "../../../chain-event";
 import { resolveParticipant, resolveRuntime } from "../../../runtime";
-import type { ChainEventPayload } from "../../watcher";
+import { SafeProcessor, SafeSpecification } from "../../../safe";
 
 /** 4.x does not export ParticipantManifest, so mirror the shape we read. */
 type ParticipantManifest = {
@@ -42,8 +41,8 @@ export const RUNTIME_EVENT_TYPES = [
 ] as const;
 
 /** Catch-all: matches every event, including custom ones sent with sendEvent. */
-export class AnyEventSpecification extends SituationSpecification {
-	isSatisfiedBy(_context: SituationContext): boolean {
+export class AnyEventSpecification extends SafeSpecification {
+	protected evaluate(_context: SituationContext): boolean {
 		return true;
 	}
 }
@@ -78,13 +77,13 @@ function describe(event: SemanticEvent): string {
 			return JSON.stringify((payload as { message: string }).message);
 		case "chain.event": {
 			// Custom events are only conventionally shaped - never assume the payload.
-			const chainEvent = payload as Partial<ChainEventPayload>;
-
-			if (!chainEvent?.chain || !chainEvent.txSig) {
-				return `payload=${JSON.stringify(payload)}`;
+			if (!isChainEventPayload(payload)) {
+				return `UNKNOWN SHAPE payload=${JSON.stringify(payload)}`;
 			}
 
-			return `${chainEvent.chain} ${chainEvent.kind} $${chainEvent.amountUsd} ${chainEvent.txSig.slice(0, 10)}...`;
+			const amount = payload.amountSol !== undefined ? `${payload.amountSol.toFixed(2)} SOL` : `$${payload.amountUsd}`;
+
+			return `${payload.eventId} ${payload.chain} ${payload.kind} ${amount} ${payload.txSig.slice(0, 12)}... ${payload.detail}`;
 		}
 		case "context_update.started":
 			return `${loopIdOf(event)} content=${JSON.stringify(String(payload.content).slice(0, 60))}`;
@@ -115,8 +114,8 @@ function describe(event: SemanticEvent): string {
 	}
 }
 
-export class EventLogger implements SituationProcessor {
-	apply(context: SituationContext): void {
+export class EventLogger extends SafeProcessor {
+	protected run(context: SituationContext): void {
 		const { event } = context;
 		const state = resolveRuntime().state;
 		const producer = producerName(event);
@@ -125,6 +124,11 @@ export class EventLogger implements SituationProcessor {
 
 		if (event.type.startsWith("inference.") || event.type === "model.answer") {
 			state.lastInferenceActivity = Date.now();
+		}
+
+		if (event.type === "chain.event" && isChainEventPayload(event.payload)) {
+			state.chainEventsSeen++;
+			state.chainEventKinds.set(event.payload.kind, (state.chainEventKinds.get(event.payload.kind) ?? 0) + 1);
 		}
 
 		const custom = (RUNTIME_EVENT_TYPES as readonly string[]).includes(event.type) ? "" : " (custom)";

@@ -1,12 +1,17 @@
 import { createAgent } from "@mozaik-ai/core";
-import { normalChainEventHandler, riskyChainEventHandler } from "./situations/chain-event";
+import {
+	malformedChainEventHandler,
+	normalChainEventHandler,
+	riskyChainEventHandler,
+} from "./situations/chain-event";
 import { ownAnswerHandler } from "./situations/own-answer";
 
 export const analyst = createAgent({
 	name: "Risk Analyst",
 	capabilities: [],
 	instruction:
-		"You are a blockchain security analyst. Given one on-chain event, reply in under 30 words with: SEVERITY: low|medium|high, then one sentence why.",
+		"You are a blockchain security analyst. Given one on-chain event, reply ONLY with a single JSON object and no other text, no markdown fence: " +
+		'{"eventId": "<the eventId you were given>", "severity": "low"|"medium"|"high", "reason": "<one sentence, under 30 words>"}',
 	tools: [],
-	handlers: [riskyChainEventHandler, normalChainEventHandler, ownAnswerHandler],
+	handlers: [riskyChainEventHandler, normalChainEventHandler, malformedChainEventHandler, ownAnswerHandler],
 });
