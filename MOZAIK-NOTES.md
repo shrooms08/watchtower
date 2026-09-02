@@ -407,3 +407,19 @@ otherwise poison an incident record.
     against Jupiter v6, ~4,000-4,500 logs each, 29 samples, **zero 429s and zero reconnects**. The
     websocket firehose is free; only the sampled RPC fetches are rate-limit exposed, so the 1-in-flight
     + 3s spacing guard is what keeps it safe. Do not raise the sample rate without a paid endpoint.
+22. **`removeOnLogsListener` can block for over a minute.** It waits for an unsubscribe ack over the
+    same websocket the firehose is saturating; stopping two streams (~19k queued messages) turned a
+    90s run into 159s, all of it after the last event. Race it against a timeout - Watchtower caps it
+    at 3s (`unsubscribeTimeoutMs`) and abandons the ack, which brought the same run back to 93s.
+23. **One `Connection` per stream, always.** Two `onLogs` subscriptions on a shared `Connection`
+    share a websocket, a reconnect state and a message queue, so a flood on one program stalls the
+    other. Each `createSolanaWatcher` builds its own `Connection`, failure window, suppression clock,
+    sampling clock and counters; only the runtime and `EnvironmentState` are shared.
+24. **Two live streams put real concurrency in the live run.** Independent programs emit detections
+    at unrelated times, so analyst loops overlap each other and the briefer without any simulation:
+    peak 3 and peak 2 across two runs, versus a flat 1 with a single stream (whose 30s failed-burst
+    suppression spaced every event beyond an inference).
+25. **Volume differs wildly by program and does not track usefulness.** Pump.fun delivered 16,900
+    logs in 90s (14,179 failed) against Jupiter's 2,423 - but because sampling is time-based, both
+    streams fetched ~20 transactions either way. The rate guard is what keeps a firehose from
+    turning into RPC load.

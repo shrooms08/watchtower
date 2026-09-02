@@ -56,7 +56,9 @@ export class AnalyseEventProcessor extends SafeProcessor {
 
 		const prompt =
 			`eventId: ${payload.eventId}\n` +
+			`source: ${payload.source}\n` +
 			`event: ${JSON.stringify({
+				source: payload.source,
 				chain: payload.chain,
 				kind: payload.kind,
 				txSig: payload.txSig,
@@ -65,7 +67,7 @@ export class AnalyseEventProcessor extends SafeProcessor {
 				wallet: payload.wallet,
 				detail: payload.detail,
 			})}\n` +
-			`Reply ONLY with JSON: {"eventId":"${payload.eventId}","severity":"low"|"medium"|"high","reason":"<one sentence>"}`;
+			`Reply ONLY with JSON: {"eventId":"${payload.eventId}","severity":"low"|"medium"|"high","reason":"<one sentence naming the source stream>"}`;
 
 		// Its own loop per event - never queued behind the previous one.
 		runLoop(agent.getId(), prompt, isolatedInput(agent, 200));

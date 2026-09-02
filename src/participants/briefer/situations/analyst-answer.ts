@@ -34,9 +34,9 @@ export class RewriteBriefProcessor extends SafeProcessor {
 	protected run(context: SituationContext): void {
 		const agent = context.participant as Agent;
 		const { incidents } = resolveRuntime().state;
-		const summary = incidents.map(({ eventId, chain, kind, severity, summary: reason }) => ({
+		const summary = incidents.map(({ eventId, source, kind, severity, summary: reason }) => ({
 			eventId,
-			chain,
+			source,
 			kind,
 			severity,
 			reason,
@@ -44,7 +44,7 @@ export class RewriteBriefProcessor extends SafeProcessor {
 
 		runLoop(
 			agent.getId(),
-			`Incidents so far: ${JSON.stringify(summary)}. Rewrite the ops brief in under 40 words.`,
+			`Incidents so far: ${JSON.stringify(summary)}. Rewrite the ops brief in under 40 words, grouped by source stream.`,
 			isolatedInput(agent, 160),
 		);
 	}

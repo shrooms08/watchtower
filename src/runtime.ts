@@ -25,6 +25,7 @@ export type Incident = {
 	id: string;
 	eventId: string;
 	chain: string;
+	source: string;
 	kind: string;
 	summary: string;
 	severity: "low" | "medium" | "high" | "unknown";

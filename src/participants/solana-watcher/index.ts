@@ -10,12 +10,14 @@ import {
 import { ChainEventPayload, EventKind, newEventId } from "../../chain-event";
 import { sendEvent } from "../../runtime";
 
-export type SolanaWatcherOptions = {
+export type SolanaWatcherConfig = {
+	/** Stream label, carried on every payload as `source`. */
+	name: string;
+	programId: string;
 	wsUrl: string;
 	rpcUrl: string;
-	programId: string;
 	largeTransferSol: number;
-	/** At most one sampled RPC fetch per this many ms. */
+	/** At most one sampled RPC fetch per this many ms, per watcher. */
 	sampleIntervalMs: number;
 	heartbeatMs: number;
 	failedWindowMs: number;
@@ -24,9 +26,13 @@ export type SolanaWatcherOptions = {
 	staleAfterMs: number;
 	maxReconnects: number;
 	reconnectDelayMs: number;
+	/** Cap on waiting for the websocket unsubscribe ack when stopping. */
+	unsubscribeTimeoutMs: number;
 };
 
 export type SolanaWatcherStats = {
+	name: string;
+	programId: string;
 	logsReceived: number;
 	failed: number;
 	sampled: number;
@@ -42,16 +48,20 @@ export type SolanaWatcherStats = {
 	lastError: string | undefined;
 };
 
-export type SolanaWatcherHandle = {
+export type SolanaWatcher = {
+	participant: Human;
+	start(): void;
 	stats(): SolanaWatcherStats;
 	stop(): Promise<void>;
 };
 
-export const DEFAULTS: SolanaWatcherOptions = {
+export const WATCHER_DEFAULTS = {
 	wsUrl: process.env.SOLANA_WS_URL ?? "wss://api.mainnet-beta.solana.com",
 	rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com",
 	// Jupiter v6
 	programId: process.env.WATCH_PROGRAM_SOLANA ?? "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+	// Pump.fun
+	programId2: process.env.WATCH_PROGRAM_SOLANA_2 ?? "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
 	largeTransferSol: Number(process.env.LARGE_TRANSFER_SOL ?? 50),
 	sampleIntervalMs: 3_000,
 	heartbeatMs: 10_000,
@@ -61,11 +71,8 @@ export const DEFAULTS: SolanaWatcherOptions = {
 	staleAfterMs: 30_000,
 	maxReconnects: 5,
 	reconnectDelayMs: 3_000,
-};
-
-export function createSolanaWatcher(): Human {
-	return createHuman({ name: "Solana Watcher", capabilities: [], handlers: [] });
-}
+	unsubscribeTimeoutMs: 3_000,
+} as const;
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -85,15 +92,39 @@ function allInstructions(tx: ParsedTransactionWithMeta): (ParsedInstruction | Pa
 	return [...top, ...inner];
 }
 
-export function startSolanaWatcher(
-	participant: Human,
-	options: Partial<SolanaWatcherOptions> = {},
-): SolanaWatcherHandle {
-	const config: SolanaWatcherOptions = { ...DEFAULTS, ...options };
+/**
+ * One self-contained live stream. Every instance builds its own Connection (so
+ * its own websocket), its own failure window, suppression clock, sampling clock,
+ * reconnect state and counters. Two instances share nothing but the runtime and
+ * the shared EnvironmentState.
+ */
+export function createSolanaWatcher(
+	options: { name: string; programId: string; wsUrl?: string; rpcUrl?: string } & Partial<SolanaWatcherConfig>,
+): SolanaWatcher {
+	const config: SolanaWatcherConfig = {
+		largeTransferSol: WATCHER_DEFAULTS.largeTransferSol,
+		sampleIntervalMs: WATCHER_DEFAULTS.sampleIntervalMs,
+		heartbeatMs: WATCHER_DEFAULTS.heartbeatMs,
+		failedWindowMs: WATCHER_DEFAULTS.failedWindowMs,
+		failedThreshold: WATCHER_DEFAULTS.failedThreshold,
+		failedSuppressMs: WATCHER_DEFAULTS.failedSuppressMs,
+		staleAfterMs: WATCHER_DEFAULTS.staleAfterMs,
+		maxReconnects: WATCHER_DEFAULTS.maxReconnects,
+		reconnectDelayMs: WATCHER_DEFAULTS.reconnectDelayMs,
+		unsubscribeTimeoutMs: WATCHER_DEFAULTS.unsubscribeTimeoutMs,
+		wsUrl: WATCHER_DEFAULTS.wsUrl,
+		rpcUrl: WATCHER_DEFAULTS.rpcUrl,
+		...options,
+	};
+
+	const participant = createHuman({ name: config.name, capabilities: [], handlers: [] });
 	const programKey = new PublicKey(config.programId);
+	// Its own Connection, therefore its own websocket.
 	const connection = new Connection(config.rpcUrl, { wsEndpoint: config.wsUrl, commitment: "confirmed" });
 
 	const stats: SolanaWatcherStats = {
+		name: config.name,
+		programId: config.programId,
 		logsReceived: 0,
 		failed: 0,
 		sampled: 0,
@@ -117,11 +148,14 @@ export function startSolanaWatcher(
 	let lastLogAt = Date.now();
 	let subscriptionId: number | undefined;
 	let stopped = false;
+	let heartbeat: NodeJS.Timeout | undefined;
+	let watchdog: NodeJS.Timeout | undefined;
 
 	function emit(kind: EventKind, txSig: string, wallet: string, detail: string, amountSol?: number): void {
 		const payload: ChainEventPayload = {
 			eventId: newEventId(),
 			chain: "solana",
+			source: config.name,
 			txSig,
 			kind,
 			amountUsd: 0,
@@ -174,7 +208,7 @@ export function startSolanaWatcher(
 
 				if (attempt === 0 && isRateLimit(error)) {
 					stats.rateLimited++;
-					console.warn(`[solana] 429 on ${signature.slice(0, 12)}..., retrying once in 2s`);
+					console.warn(`[${config.name}] 429 on ${signature.slice(0, 12)}..., retrying once in 2s`);
 					await sleep(2_000);
 					continue;
 				}
@@ -251,6 +285,7 @@ export function startSolanaWatcher(
 	function maybeSample(signature: string): void {
 		const now = Date.now();
 
+		// One fetch in flight per watcher, spaced by sampleIntervalMs.
 		if (fetchInFlight || now - lastSampleAt < config.sampleIntervalMs) {
 			stats.dropped++;
 			window.dropped++;
@@ -295,14 +330,14 @@ export function startSolanaWatcher(
 		} catch (error) {
 			// The web3.js callback must never throw back into the socket.
 			stats.lastError = error instanceof Error ? error.message : String(error);
-			console.error(`[solana] log handler error: ${stats.lastError}`);
+			console.error(`[${config.name}] log handler error: ${stats.lastError}`);
 		}
 	}
 
 	async function subscribe(): Promise<void> {
 		subscriptionId = await connection.onLogs(programKey, onLogs, "confirmed");
 		lastLogAt = Date.now();
-		console.log(`[solana] subscribed to ${config.programId.slice(0, 8)}... via ${config.wsUrl} (sub ${subscriptionId})`);
+		console.log(`[${config.name}] subscribed to ${config.programId.slice(0, 8)}... (sub ${subscriptionId})`);
 	}
 
 	async function reconnect(reason: string): Promise<void> {
@@ -311,13 +346,15 @@ export function startSolanaWatcher(
 		}
 
 		if (stats.reconnects >= config.maxReconnects) {
-			console.error(`[solana] giving up after ${stats.reconnects} reconnects (${reason})`);
+			console.error(`[${config.name}] giving up after ${stats.reconnects} reconnects (${reason})`);
 			return;
 		}
 
 		stats.reconnects++;
 		stats.lastError = reason;
-		console.warn(`[solana] ${reason} - resubscribing in ${config.reconnectDelayMs / 1000}s (attempt ${stats.reconnects}/${config.maxReconnects})`);
+		console.warn(
+			`[${config.name}] ${reason} - resubscribing in ${config.reconnectDelayMs / 1000}s (attempt ${stats.reconnects}/${config.maxReconnects})`,
+		);
 
 		try {
 			if (subscriptionId !== undefined) {
@@ -341,60 +378,76 @@ export function startSolanaWatcher(
 		}
 	}
 
-	// web3.js v1 keeps its socket private; hook it when present, and fall back to
-	// a staleness watchdog so a silent death still triggers a resubscribe.
-	const socket = (connection as unknown as { _rpcWebSocket?: { on?: (event: string, fn: (arg: unknown) => void) => void } })
-		._rpcWebSocket;
+	function start(): void {
+		// web3.js v1 keeps its socket private; hook it when present, and fall back
+		// to a staleness watchdog so a silent death still triggers a resubscribe.
+		const socket = (
+			connection as unknown as { _rpcWebSocket?: { on?: (event: string, fn: (arg: unknown) => void) => void } }
+		)._rpcWebSocket;
 
-	if (typeof socket?.on === "function") {
-		socket.on("error", (error: unknown) => {
-			void reconnect(`websocket error: ${error instanceof Error ? error.message : String(error)}`);
-		});
-		socket.on("close", () => {
-			void reconnect("websocket closed");
+		if (typeof socket?.on === "function") {
+			socket.on("error", (error: unknown) => {
+				void reconnect(`websocket error: ${error instanceof Error ? error.message : String(error)}`);
+			});
+			socket.on("close", () => {
+				void reconnect("websocket closed");
+			});
+		}
+
+		watchdog = setInterval(() => {
+			if (!stopped && Date.now() - lastLogAt > config.staleAfterMs) {
+				void reconnect(`no logs for ${config.staleAfterMs / 1000}s`);
+				lastLogAt = Date.now();
+			}
+		}, 5_000);
+
+		heartbeat = setInterval(() => {
+			if (stopped) {
+				return;
+			}
+
+			const counts = window;
+			window = { seen: 0, failed: 0, sampled: 0, dropped: 0 };
+
+			emit(
+				"normal",
+				`heartbeat-${Date.now()}`,
+				config.programId,
+				`window seen=${counts.seen} failed=${counts.failed} sampled=${counts.sampled} dropped=${counts.dropped}`,
+			);
+		}, config.heartbeatMs);
+
+		void subscribe().catch((error) => {
+			void reconnect(`initial subscribe failed: ${error instanceof Error ? error.message : String(error)}`);
 		});
 	}
 
-	const watchdog = setInterval(() => {
-		if (!stopped && Date.now() - lastLogAt > config.staleAfterMs) {
-			void reconnect(`no logs for ${config.staleAfterMs / 1000}s`);
-			lastLogAt = Date.now();
-		}
-	}, 5_000);
-
-	const heartbeat = setInterval(() => {
-		if (stopped) {
-			return;
-		}
-
-		const counts = window;
-		window = { seen: 0, failed: 0, sampled: 0, dropped: 0 };
-
-		emit(
-			"normal",
-			`heartbeat-${Date.now()}`,
-			config.programId,
-			`window seen=${counts.seen} failed=${counts.failed} sampled=${counts.sampled} dropped=${counts.dropped}`,
-		);
-	}, config.heartbeatMs);
-
-	void subscribe().catch((error) => {
-		void reconnect(`initial subscribe failed: ${error instanceof Error ? error.message : String(error)}`);
-	});
-
 	return {
+		participant,
+		start,
 		stats: () => ({ ...stats, emitted: { ...stats.emitted } }),
 		stop: async () => {
 			stopped = true;
-			clearInterval(heartbeat);
-			clearInterval(watchdog);
 
-			try {
-				if (subscriptionId !== undefined) {
-					await connection.removeOnLogsListener(subscriptionId);
-				}
-			} catch {
-				// already closed
+			if (heartbeat) clearInterval(heartbeat);
+			if (watchdog) clearInterval(watchdog);
+
+			if (subscriptionId === undefined) {
+				return;
+			}
+
+			// removeOnLogsListener waits for an unsubscribe ack over the same socket
+			// the firehose is saturating; on a busy program that can block for over a
+			// minute, so never wait on it unbounded.
+			const unsubscribed = connection.removeOnLogsListener(subscriptionId).then(
+				() => true,
+				() => true,
+			);
+
+			const settled = await Promise.race([unsubscribed, sleep(config.unsubscribeTimeoutMs).then(() => false)]);
+
+			if (!settled) {
+				console.warn(`[${config.name}] unsubscribe did not ack within ${config.unsubscribeTimeoutMs / 1000}s, abandoning it`);
 			}
 		},
 	};

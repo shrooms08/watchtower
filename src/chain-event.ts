@@ -8,6 +8,8 @@ export const EVENT_KINDS: readonly EventKind[] = ["large_transfer", "authority_c
 export type ChainEventPayload = {
 	eventId: string;
 	chain: ChainName;
+	/** Which watcher produced this - two live streams share chain "solana". */
+	source: string;
 	txSig: string;
 	kind: EventKind;
 	amountUsd: number;
@@ -37,6 +39,8 @@ export function isChainEventPayload(value: unknown): value is ChainEventPayload 
 		typeof candidate.eventId === "string" &&
 		candidate.eventId.length > 0 &&
 		(candidate.chain === "solana" || candidate.chain === "base") &&
+		typeof candidate.source === "string" &&
+		candidate.source.length > 0 &&
 		typeof candidate.txSig === "string" &&
 		typeof candidate.kind === "string" &&
 		EVENT_KINDS.includes(candidate.kind as EventKind) &&

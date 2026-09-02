@@ -83,7 +83,7 @@ function describe(event: SemanticEvent): string {
 
 			const amount = payload.amountSol !== undefined ? `${payload.amountSol.toFixed(2)} SOL` : `$${payload.amountUsd}`;
 
-			return `${payload.eventId} ${payload.chain} ${payload.kind} ${amount} ${payload.txSig.slice(0, 12)}... ${payload.detail}`;
+			return `${payload.eventId} [${payload.source}] ${payload.kind} ${amount} ${payload.txSig.slice(0, 12)}... ${payload.detail}`;
 		}
 		case "context_update.started":
 			return `${loopIdOf(event)} content=${JSON.stringify(String(payload.content).slice(0, 60))}`;

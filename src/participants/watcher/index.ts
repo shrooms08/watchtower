@@ -6,6 +6,7 @@ export type { ChainEventPayload, ChainName, EventKind };
 
 type WatcherConfig = {
 	chain: ChainName;
+	name: string;
 	intervalMs: number;
 	kinds: readonly EventKind[];
 };
@@ -63,7 +64,7 @@ export function createWatcher(chainName: ChainName, intervalMs: number): Human {
 	const name = `${chainName === "solana" ? "Solana" : "Base"} Watcher (simulated)`;
 	const watcher = createHuman({ name, capabilities: [], handlers: [] });
 
-	configs.set(watcher.getId(), { chain: chainName, intervalMs, kinds: KIND_PATTERNS[chainName] });
+	configs.set(watcher.getId(), { chain: chainName, name, intervalMs, kinds: KIND_PATTERNS[chainName] });
 
 	return watcher;
 }
@@ -84,6 +85,7 @@ export function startWatcher(participant: Human, count: number): Promise<void> {
 			const payload: ChainEventPayload = {
 				eventId: newEventId(),
 				chain: config.chain,
+				source: config.name,
 				txSig: fakeTxSig(config.chain),
 				kind,
 				amountUsd: amountFor(kind),
