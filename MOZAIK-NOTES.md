@@ -284,6 +284,44 @@ Also registered: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5` (OpenAI Re
 `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `deepseek-v4-flash`, `deepseek-v4-pro`.
 Every example in the repo uses `gpt-5.4`; swapping in `claude-haiku-4-5` needed no other change.
 
+## Concurrency (measured, not assumed)
+
+**`runLoop` does not serialise — not globally, and not per participant.** Verified by
+`pnpm proof`: peak 3 inferences in flight at once, with the Risk Analyst overlapping *itself*
+(`Risk Analyst started …12.802Z while Risk Analyst was in flight (started …12.621Z, completed
+…15.468Z)`). Each `runLoop` call builds its own `AgentLoop`, `LoopStateExecutor` and
+`TransitionResolver`, then calls `agentLoop.run(...)` **without awaiting** — nothing keyed on the
+agent id gates it. One agent can therefore have any number of loops open at once.
+
+What that buys and what it costs:
+
+- **Fan-out is free.** N events arriving together start N loops; no queue, no worker pool. The
+  budget cap has to be yours (`InferenceBudget.tryConsume()` in the specification, so the
+  reservation happens at the moment of the decision).
+- **`agent.getMemory().getContext()` is a single mutable object shared by every loop.**
+  `ModelContext.addContextItems` / `addItem` **push into the existing array and return `this`** —
+  they do not copy. Two concurrent loops on one agent append into the same context and each
+  inference sees the other's prompt. The examples all pass agent memory because they run one loop
+  at a time. Watchtower gives each loop a fresh context instead (`src/agent-context.ts`):
+
+  ```ts
+  const context = ModelContext.create();
+  context.addItem(DeveloperMessageItem.create(agent.getDeveloperMessage()));
+  ```
+
+  `Agent.create` seeds memory with a `DeveloperMessageItem` built from `instruction`, so rebuilding
+  it this way reproduces the agent's system prompt exactly, with no cross-talk. Use shared memory
+  only when you want a genuinely accumulating conversation *and* loops never overlap.
+- **Answers cannot be correlated back to their trigger.** `context_update.*` carries `loopId`;
+  `inference.started`, `inference.completed` and `model.answer` **do not**. With concurrent loops on
+  one agent there is no supported way to tell which `model.answer` belongs to which event. Watchtower
+  matches in dispatch order (a FIFO of pending analyses), which is approximate and visibly mislabels
+  a chain when two answers land out of order. **If exact correlation matters, carry a correlation id
+  inside the prompt and have the model echo it, or give each concurrent job its own participant.**
+- Pairing `inference.started` with `inference.completed` for a duration has the same limitation —
+  `src/report.ts` pairs per producer in arrival order. Peak concurrency itself is exact, because
+  sweeping +1/-1 over the log needs no pairing.
+
 ## Gotchas
 
 1. **`ParticipantManifest` is declared but not exported.** `import { ParticipantManifest }` fails
@@ -316,3 +354,15 @@ Every example in the repo uses `gpt-5.4`; swapping in `claude-haiku-4-5` needed 
     disabled, events will not be sent`. Set `MOZAIK_API_KEY` only if you want cloud telemetry.
 13. **The model name is not type-checked** (gotcha inherited from `model: string`). A typo surfaces
     only at runtime, inside the un-awaited loop — i.e. as gotcha 5.
+14. **Nothing catches exceptions thrown inside a handler.** `EventProcessor.process` calls
+    `specification.isSatisfiedBy` and `processor.apply` with no try/catch, and `RuntimeService.publish`
+    adds none, so one bad handler kills the process mid-publish and the remaining participants never
+    see the event. 3.x wrapped delivery in a try/catch; 4.x does not. A `chain.event` whose payload
+    was not the shape the observer assumed took the whole run down this way — **validate custom event
+    payloads before reading them**, since `sendEvent` accepts any shape under any type name.
+15. **`ModelContext.addContextItems` mutates and returns `this`** — see the concurrency section. It
+    reads like a copy-on-write builder and is not one.
+16. **A specification can be side-effecting, and sometimes must be.** Handlers run in array order for
+    a participant, and the specification is the only place that sees a candidate event before the
+    decision is final — that is where a budget reservation belongs, otherwise two events arriving
+    together both pass a `hasCapacity()` check and both start loops.

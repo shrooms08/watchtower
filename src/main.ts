@@ -1,44 +1,108 @@
 import "dotenv/config";
-import { SemanticEvent } from "@mozaik-ai/core";
-import { answered } from "./completion";
-import { echoAgent } from "./participants/echo-agent";
-import { MODEL } from "./participants/echo-agent/situations/message-sent";
+import { MODEL } from "./agent-context";
+import { analyst } from "./participants/analyst";
+import { briefer } from "./participants/briefer";
 import { observer } from "./participants/observer";
-import { user } from "./participants/user";
-import { EnvironmentState, EventCounter, initializeRuntime, join, resolveRuntime, sendEvent, sendMessage } from "./runtime";
+import { operator } from "./participants/operator";
+import { createWatcher, startWatcher } from "./participants/watcher";
+import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency } from "./report";
+import { EnvironmentState, initializeRuntime, join, resolveRuntime } from "./runtime";
 
-const PROMPT = "Reply with exactly: WATCHTOWER ONLINE";
-const TIMEOUT_MS = 30_000;
+const MAX_INFERENCES = 12;
+const EVENTS_PER_WATCHER = 4;
+const QUIET_MS = 5_000;
+const HARD_TIMEOUT_MS = 60_000;
 
-initializeRuntime({ state: new EnvironmentState(new EventCounter()) });
+const state = EnvironmentState.create(MAX_INFERENCES);
+initializeRuntime({ state });
+state.analystId = analyst.getId();
 
-// Join the observer first so it witnesses everyone else joining.
+// Observer first, so it witnesses every later join.
 join(observer);
-join(user);
-join(echoAgent);
+join(operator);
+join(analyst);
+join(briefer);
 
-// runLoop is fire-and-forget: a provider failure surfaces here, not at the call site.
+const solanaWatcher = createWatcher("solana", 1500);
+const baseWatcher = createWatcher("base", 2200);
+
+join(solanaWatcher);
+join(baseWatcher);
+
+// runLoop is fire-and-forget: a provider failure lands here, not at the call site.
 process.on("unhandledRejection", (reason) => {
-	console.error(`SMOKE FAIL: unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
+	console.error(`CONCURRENCY FAIL: unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
 	process.exit(1);
 });
 
-const timeout = setTimeout(() => {
-	console.error(`SMOKE FAIL: no model.answer within ${TIMEOUT_MS / 1000}s`);
+const startedAt = Date.now();
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+console.log(`[main] model=${MODEL} budget=${MAX_INFERENCES} watchers=2 x ${EVENTS_PER_WATCHER} events\n`);
+
+// Both watchers run at once so their streams interleave.
+const watchersDone = Promise.all([
+	startWatcher(solanaWatcher, EVENTS_PER_WATCHER),
+	startWatcher(baseWatcher, EVENTS_PER_WATCHER),
+]);
+
+let watchersFinished = false;
+void watchersDone.then(() => {
+	watchersFinished = true;
+});
+
+let timedOut = false;
+
+while (true) {
+	if (Date.now() - startedAt >= HARD_TIMEOUT_MS) {
+		timedOut = true;
+		break;
+	}
+
+	if (watchersFinished && state.inFlight() === 0 && Date.now() - state.lastInferenceActivity >= QUIET_MS) {
+		break;
+	}
+
+	await sleep(250);
+}
+
+const chainEvents = state.eventLog.filter((entry) => entry.type === "chain.event").length;
+const inferenceStarts = state.eventLog.filter((entry) => entry.type === "inference.started").length;
+const intervals = inferenceIntervals(state.eventLog);
+const found = overlaps(intervals);
+const peak = peakConcurrency(state.eventLog);
+
+console.log(`\n${"=".repeat(72)}`);
+console.log("CONCURRENCY REPORT");
+console.log("=".repeat(72));
+console.log(`Wall clock:               ${((Date.now() - startedAt) / 1000).toFixed(1)}s${timedOut ? " (HARD TIMEOUT)" : ""}`);
+console.log(`Total chain.events:       ${chainEvents}`);
+console.log(`Skipped as normal:        ${state.skippedNormalCount}`);
+console.log(`Blocked by budget:        ${state.budgetBlockedCount}`);
+console.log(`Sent to inference:        ${state.dispatchedCount} chain.events -> analyst runLoops`);
+console.log(`Total runLoop calls:      ${state.inferenceBudget.used} (analyst ${state.dispatchedCount} + briefer ${state.inferenceBudget.used - state.dispatchedCount})`);
+console.log(`inference.started events: ${inferenceStarts}`);
+console.log(`Peak concurrent infer.:   ${peak}`);
+console.log(`Overlapping pairs:        ${found.length}`);
+
+for (const overlap of found) {
+	console.log(formatOverlap(overlap));
+}
+
+console.log(`Incidents recorded:       ${state.incidents.length}`);
+
+for (const incident of state.incidents) {
+	console.log(`  ${incident.id} [${incident.severity}] ${incident.chain}: ${incident.summary.replace(/\s+/g, " ")}`);
+}
+
+console.log(`Budget used:              ${state.inferenceBudget.used}/${state.inferenceBudget.max}`);
+console.log(`Final brief:              ${state.brief.replace(/\s+/g, " ")}`);
+console.log("=".repeat(72));
+
+if (peak <= 1) {
+	console.error("CONCURRENCY FAIL: inferences ran sequentially");
 	process.exit(1);
-}, TIMEOUT_MS);
+}
 
-console.log(`[${new Date().toISOString()}] [main] model=${MODEL} sending: ${JSON.stringify(PROMPT)}`);
-sendMessage(PROMPT, user.getId());
-
-const answer = await answered;
-clearTimeout(timeout);
-
-// Prove custom events fan out to handlers exactly like runtime events.
-sendEvent(SemanticEvent.create("chain.event", user.getId(), { step: 1, note: "answer received" }), user.getId());
-
-const { events } = resolveRuntime().state;
-console.log(`[${new Date().toISOString()}] [main] shared state: ${events.getCount()} events -> ${events.summary()}`);
-console.log(`SMOKE PASS: ${answer}`);
-
+console.log(`CONCURRENCY PASS: peak ${peak} inferences in flight at once`);
 setTimeout(() => process.exit(0), 50);

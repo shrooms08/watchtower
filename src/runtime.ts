@@ -1,28 +1,74 @@
 import { defineRuntime, RuntimeState } from "@mozaik-ai/core";
 
-/** Shared state: a counter every participant can read and write through the runtime. */
-export class EventCounter {
-	private count = 0;
-	private readonly byType = new Map<string, number>();
+/** Hard global cap on how many runLoop calls the whole run may make. */
+export class InferenceBudget {
+	used = 0;
 
-	record(type: string): number {
-		this.count++;
-		this.byType.set(type, (this.byType.get(type) ?? 0) + 1);
-		return this.count;
+	constructor(public readonly max: number) {}
+
+	tryConsume(): boolean {
+		if (this.used >= this.max) {
+			return false;
+		}
+
+		this.used++;
+		return true;
 	}
 
-	getCount(): number {
-		return this.count;
-	}
-
-	summary(): string {
-		return [...this.byType.entries()].map(([type, n]) => `${type}=${n}`).join(" ");
+	remaining(): number {
+		return this.max - this.used;
 	}
 }
 
+export type Incident = {
+	id: string;
+	chain: string;
+	summary: string;
+	severity: "low" | "medium" | "high" | "unknown";
+};
+
+export type LoggedEvent = {
+	ts: number;
+	type: string;
+	producer: string;
+};
+
+/** What the analyst dispatched, so an answer can be matched back to a chain. */
+export type PendingAnalysis = {
+	chain: string;
+	txSig: string;
+	kind: string;
+};
+
 export class EnvironmentState extends RuntimeState {
-	constructor(public readonly events: EventCounter) {
+	readonly incidents: Incident[] = [];
+	readonly eventLog: LoggedEvent[] = [];
+	readonly pendingAnalyses: PendingAnalysis[] = [];
+	brief = "(no brief yet)";
+	chainEventsSeen = 0;
+	skippedNormalCount = 0;
+	dispatchedCount = 0;
+	budgetBlockedCount = 0;
+	analystId = "";
+	lastInferenceActivity = Date.now();
+
+	constructor(public readonly inferenceBudget: InferenceBudget) {
 		super();
+	}
+
+	static create(maxInferences: number): EnvironmentState {
+		return new EnvironmentState(new InferenceBudget(maxInferences));
+	}
+
+	inFlight(): number {
+		let n = 0;
+
+		for (const entry of this.eventLog) {
+			if (entry.type === "inference.started") n++;
+			if (entry.type === "inference.completed") n--;
+		}
+
+		return n;
 	}
 }
 

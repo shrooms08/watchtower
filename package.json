@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "smoke": "tsx src/main.ts",
+    "proof": "tsx src/main.ts",
+    "smoke": "tsx src/smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
