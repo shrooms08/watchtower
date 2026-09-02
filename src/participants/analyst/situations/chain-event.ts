@@ -1,5 +1,6 @@
 import { Agent, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { isolatedInput } from "../../../agent-context";
+import { MODEL_ANALYST } from "../../../models";
 import { isChainEventPayload } from "../../../chain-event";
 import { resolveRuntime, runLoop } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
@@ -70,7 +71,7 @@ export class AnalyseEventProcessor extends SafeProcessor {
 			`Reply ONLY with JSON: {"eventId":"${payload.eventId}","severity":"low"|"medium"|"high","reason":"<one sentence naming the source stream>"}`;
 
 		// Its own loop per event - never queued behind the previous one.
-		runLoop(agent.getId(), prompt, isolatedInput(agent, 200));
+		runLoop(agent.getId(), prompt, isolatedInput(agent, MODEL_ANALYST, 200));
 	}
 }
 

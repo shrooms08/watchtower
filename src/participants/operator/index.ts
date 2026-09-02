@@ -1,8 +1,9 @@
 import { createHuman } from "@mozaik-ai/core";
+import { approvalCommandHandler } from "./situations/approval-command";
 
-/** Placeholder for the human in the loop - joins, reacts to nothing in this run. */
+/** The human in the loop: settles guardrail approvals with /approve or /reject. */
 export const operator = createHuman({
 	name: "Operator",
-	capabilities: ["acknowledge_incident"],
-	handlers: [],
+	capabilities: ["acknowledge_incident", "approve_actions"],
+	handlers: [approvalCommandHandler],
 });

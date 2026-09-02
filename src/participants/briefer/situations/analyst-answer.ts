@@ -1,5 +1,6 @@
 import { Agent, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { isolatedInput } from "../../../agent-context";
+import { MODEL_BRIEFER } from "../../../models";
 import { resolveRuntime, runLoop } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
 
@@ -45,7 +46,7 @@ export class RewriteBriefProcessor extends SafeProcessor {
 		runLoop(
 			agent.getId(),
 			`Incidents so far: ${JSON.stringify(summary)}. Rewrite the ops brief in under 40 words, grouped by source stream.`,
-			isolatedInput(agent, 160),
+			isolatedInput(agent, MODEL_BRIEFER, 160),
 		);
 	}
 }

@@ -1,11 +1,13 @@
 import "dotenv/config";
-import { MODEL } from "./agent-context";
+import { modelSummary } from "./models";
 import { analyst } from "./participants/analyst";
 import { briefer } from "./participants/briefer";
+import { guardrail } from "./participants/guardrail";
 import { observer } from "./participants/observer";
 import { operator } from "./participants/operator";
+import { responder } from "./participants/responder";
 import { createWatcher, startWatcher } from "./participants/watcher";
-import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency } from "./report";
+import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency, printGuardrailSection } from "./report";
 import { EnvironmentState, initializeRuntime, join, resolveRuntime } from "./runtime";
 
 const MAX_INFERENCES = 12;
@@ -19,9 +21,11 @@ state.analystId = analyst.getId();
 
 // Observer first, so it witnesses every later join.
 join(observer);
+join(guardrail);
 join(operator);
 join(analyst);
 join(briefer);
+join(responder);
 
 const solanaWatcher = createWatcher("solana", 1500);
 const baseWatcher = createWatcher("base", 2200);
@@ -38,7 +42,7 @@ process.on("unhandledRejection", (reason) => {
 const startedAt = Date.now();
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-console.log(`[main] model=${MODEL} budget=${MAX_INFERENCES} watchers=2 x ${EVENTS_PER_WATCHER} events\n`);
+console.log(`[main] models: ${modelSummary()} budget=${MAX_INFERENCES} watchers=2 x ${EVENTS_PER_WATCHER} events\n`);
 
 // Both watchers run at once so their streams interleave.
 const watchersDone = Promise.all([
@@ -96,6 +100,7 @@ for (const incident of state.incidents) {
 }
 
 console.log(`Budget used:              ${state.inferenceBudget.used}/${state.inferenceBudget.max}`);
+printGuardrailSection(state);
 console.log(`Final brief:              ${state.brief.replace(/\s+/g, " ")}`);
 console.log("=".repeat(72));
 

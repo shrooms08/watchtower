@@ -32,6 +32,42 @@ export type Incident = {
 	correlated: boolean;
 };
 
+export type GuardrailAction = "pause_program" | "freeze_wallet" | "alert_operator";
+
+export type PendingApproval = {
+	pendingId: string;
+	incidentId: string;
+	action: GuardrailAction;
+	target: string;
+	reason: string;
+	ts: string;
+};
+
+export type GuardrailDecision = {
+	pendingId: string;
+	incidentId: string;
+	decision: "approved" | "rejected";
+	by: "operator" | "auto";
+	ts: string;
+	/** Why it was rejected, surfaced to the model in the function output. */
+	note?: string;
+};
+
+/** Simulation only - nothing here ever touches a chain. */
+export type ExecutedAction = {
+	incidentId: string;
+	action: GuardrailAction;
+	target: string;
+	reason: string;
+	status: "executed";
+	ts: string;
+};
+
+export type ResponderAck = {
+	ts: number;
+	text: string;
+};
+
 export type LoggedEvent = {
 	ts: number;
 	type: string;
@@ -44,6 +80,10 @@ export class EnvironmentState extends RuntimeState {
 	/** eventId -> the event that was sent for analysis, for exact correlation. */
 	readonly analysedEvents = new Map<string, ChainEventPayload>();
 	readonly chainEventKinds = new Map<EventKind, number>();
+	readonly pendingApprovals = new Map<string, PendingApproval>();
+	readonly decisions: GuardrailDecision[] = [];
+	readonly actions: ExecutedAction[] = [];
+	readonly responderAcks: ResponderAck[] = [];
 	brief = "(no brief yet)";
 	analystId = "";
 	lastInferenceActivity = Date.now();
@@ -60,6 +100,32 @@ export class EnvironmentState extends RuntimeState {
 
 	static create(maxInferences: number): EnvironmentState {
 		return new EnvironmentState(new InferenceBudget(maxInferences));
+	}
+
+	addPending(pending: PendingApproval): void {
+		this.pendingApprovals.set(pending.pendingId, pending);
+	}
+
+	getPending(pendingId: string): PendingApproval | undefined {
+		return this.pendingApprovals.get(pendingId);
+	}
+
+	/** Records a decision once; later calls for the same pendingId are ignored. */
+	resolvePending(decision: GuardrailDecision): boolean {
+		if (this.decisions.some((existing) => existing.pendingId === decision.pendingId)) {
+			return false;
+		}
+
+		this.decisions.push(decision);
+		return true;
+	}
+
+	decisionFor(pendingId: string): GuardrailDecision | undefined {
+		return this.decisions.find((decision) => decision.pendingId === pendingId);
+	}
+
+	recordAction(action: ExecutedAction): void {
+		this.actions.push(action);
 	}
 
 	inFlight(): number {

@@ -8,6 +8,7 @@ import {
 	SituationHandler,
 } from "@mozaik-ai/core";
 import { isChainEventPayload } from "../../../chain-event";
+import { isGuardrailDecisionPayload, isGuardrailPendingPayload } from "../../../guardrail-events";
 import { resolveParticipant, resolveRuntime } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
 
@@ -84,6 +85,20 @@ function describe(event: SemanticEvent): string {
 			const amount = payload.amountSol !== undefined ? `${payload.amountSol.toFixed(2)} SOL` : `$${payload.amountUsd}`;
 
 			return `${payload.eventId} [${payload.source}] ${payload.kind} ${amount} ${payload.txSig.slice(0, 12)}... ${payload.detail}`;
+		}
+		case "guardrail.pending": {
+			if (!isGuardrailPendingPayload(payload)) {
+				return `UNKNOWN SHAPE payload=${JSON.stringify(payload)}`;
+			}
+
+			return `GUARDRAIL PENDING ${payload.pendingId} incident=${payload.incidentId} action=${payload.action} target=${payload.target}`;
+		}
+		case "guardrail.decision": {
+			if (!isGuardrailDecisionPayload(payload)) {
+				return `UNKNOWN SHAPE payload=${JSON.stringify(payload)}`;
+			}
+
+			return `GUARDRAIL DECISION ${payload.pendingId} ${payload.decision.toUpperCase()} by=${payload.by}`;
 		}
 		case "context_update.started":
 			return `${loopIdOf(event)} content=${JSON.stringify(String(payload.content).slice(0, 60))}`;

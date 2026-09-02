@@ -349,6 +349,27 @@ validates the shape before trusting it). Across live and simulated runs Haiku re
 every time (0 parse failures), but the tolerant path stays because a single malformed answer would
 otherwise poison an incident record.
 
+## Model switching
+
+`InferenceInput.model` is a plain string resolved at runtime against `supportedModels`, so every
+agent can run a different model. Watchtower reads three env vars in `src/models.ts`, each defaulting
+to `claude-haiku-4-5`: `MODEL_ANALYST`, `MODEL_BRIEFER`, `MODEL_RESPONDER` (see `.env.example`).
+
+The full set 4.0.0-beta.12 registers:
+
+| Provider | Model names | Credential |
+| --- | --- | --- |
+| Anthropic | `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-opus-4-8` | `ANTHROPIC_API_KEY` |
+| OpenAI | `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.5` | `OPENAI_API_KEY` |
+| Gemini | **`gemini-3.5-flash`**, **`gemini-3.1-pro-preview`** | `GEMINI_API_KEY` |
+| DeepSeek | `deepseek-v4-flash`, `deepseek-v4-pro` | `OPENAI_API_KEY` + `OPENAI_BASE_URL` |
+
+**Gemini needs `GEMINI_API_KEY` in `.env`** — `GeminiGenerateContent` reads it directly
+(`process.env.GEMINI_API_KEY`), and no key is configured in this repo. Nothing else changes: point
+`MODEL_ANALYST=gemini-3.5-flash` and the runtime picks the Gemini endpoint on its own. Worth knowing
+before switching: `structuredOutput` works on the Gemini path (`responseMimeType` +
+`responseSchema`), unlike Anthropic — see the section above.
+
 ## Gotchas
 
 1. **`ParticipantManifest` is declared but not exported.** `import { ParticipantManifest }` fails
@@ -423,3 +444,20 @@ otherwise poison an incident record.
     logs in 90s (14,179 failed) against Jupiter's 2,423 - but because sampling is time-based, both
     streams fetched ~20 transactions either way. The rate guard is what keeps a firehose from
     turning into RPC load.
+26. **`InterceptionHandler` transition shapes matched the notes exactly** — no adjustment needed.
+    `isSatisfiedBy` sees `{ nextStateId: "function_call", input: { call, inferenceInput } }`, returning
+    the transition untouched lets the tool run, and the rejection path is
+    `inferenceInput.context.addContextItems([call, output])` then
+    `{ nextStateId: "inference", input: inferenceInput }`, exactly as `human-in-the-loop` does it.
+    The model then answers normally, so the rejection reads to it as a tool result rather than an error.
+27. **Interception is where a guardrail belongs, not the tool.** `invoke()` runs only after `handle()`
+    returns an unmodified `function_call` transition, so a rejected action never reaches the tool at
+    all — the auto-reject drill records 0 executed actions while the approve drill records 1. A check
+    inside `invoke()` would already be too late to be called a gate.
+28. **An interceptor needs a participant to speak as.** `handle()` runs inside the agent's loop, not
+    in a handler, so `context.participant` is not available: import the Guardrail participant and pass
+    its id to `SemanticEvent.create` / `sendEvent`, otherwise the events would be attributed to whoever
+    happens to be convenient.
+29. **`handle()` is genuinely async and blocks only its own loop.** A 3s auto-reject wait holds that
+    responder loop open while every other participant keeps producing — the guardrail never stalls the
+    runtime, which is the same non-serialising behaviour as `runLoop` itself.

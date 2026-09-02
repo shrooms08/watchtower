@@ -1,11 +1,13 @@
 import "dotenv/config";
-import { MODEL } from "./agent-context";
+import { modelSummary } from "./models";
 import { analyst } from "./participants/analyst";
 import { briefer } from "./participants/briefer";
+import { guardrail } from "./participants/guardrail";
 import { observer } from "./participants/observer";
 import { operator } from "./participants/operator";
+import { responder } from "./participants/responder";
 import { createSolanaWatcher, SolanaWatcher, WATCHER_DEFAULTS } from "./participants/solana-watcher";
-import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency } from "./report";
+import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency, printGuardrailSection } from "./report";
 import { EnvironmentState, initializeRuntime, join, resolveRuntime } from "./runtime";
 
 const MAX_INFERENCES = 8;
@@ -16,9 +18,11 @@ initializeRuntime({ state });
 state.analystId = analyst.getId();
 
 join(observer);
+join(guardrail);
 join(operator);
 join(analyst);
 join(briefer);
+join(responder);
 
 // Two fully independent streams: own Connection, own websocket, own counters.
 const streams: SolanaWatcher[] = [
@@ -37,7 +41,7 @@ process.on("unhandledRejection", (reason) => {
 const startedAt = Date.now();
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-console.log(`[live] model=${MODEL} budget=${MAX_INFERENCES} run=${RUN_MS / 1000}s`);
+console.log(`[live] models: ${modelSummary()} budget=${MAX_INFERENCES} run=${RUN_MS / 1000}s`);
 console.log(`[live] ws=${WATCHER_DEFAULTS.wsUrl}`);
 console.log(`[live] rpc=${WATCHER_DEFAULTS.rpcUrl}`);
 console.log(`[live] largeTransferSol=${WATCHER_DEFAULTS.largeTransferSol}`);
@@ -120,6 +124,7 @@ for (const incident of state.incidents) {
 	);
 }
 
+printGuardrailSection(state);
 console.log(`Final brief:              ${state.brief.replace(/\s+/g, " ")}`);
 console.log(`Overlapping pairs:        ${found.length}`);
 

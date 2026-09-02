@@ -6,6 +6,7 @@
   "scripts": {
     "live": "tsx src/live.ts",
     "proof": "tsx src/main.ts",
+    "drill": "tsx src/drill.ts",
     "smoke": "tsx src/smoke.ts",
     "typecheck": "tsc --noEmit"
   },
