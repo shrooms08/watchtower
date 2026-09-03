@@ -2,10 +2,9 @@ import {
 	FunctionCallItem,
 	FunctionCallOutputItem,
 	SemanticEvent,
-	type ExecutableLoopStateId,
+	type ExecutableTransition,
 	type InferenceInput,
 	type InterceptionHandler,
-	type LoopTransition,
 } from "@mozaik-ai/core";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
@@ -14,8 +13,6 @@ import { GUARDRAIL_ACTIONS } from "../../../guardrail-events";
 import { resolveRuntime, sendEvent } from "../../../runtime";
 import type { GuardrailAction, GuardrailDecision } from "../../../runtime";
 import { guardrail } from "../../guardrail";
-
-type ExecutableTransition = LoopTransition<ExecutableLoopStateId>;
 
 export type GuardrailMode = "auto-reject" | "auto-approve" | "prompt";
 

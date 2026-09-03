@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@mozaik-ai/core':
-        specifier: 4.0.0-beta.12
-        version: 4.0.0-beta.12(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+        specifier: 4.0.0
+        version: 4.0.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@solana/web3.js':
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@7.0.2)(utf-8-validate@6.0.6)
@@ -232,8 +232,8 @@ packages:
       '@mozaik-ai/core':
         optional: true
 
-  '@mozaik-ai/core@4.0.0-beta.12':
-    resolution: {integrity: sha512-johvdN6E0UPU5IJsKcc28Ttz+SHrK/EbAMjiwMhT6Na46HYPls/30S0zKao8pqS9povWg1its3ibk0ZphvG0ow==}
+  '@mozaik-ai/core@4.0.0':
+    resolution: {integrity: sha512-3vFhIGDDwmGMQHmkPtScFf2venBQSHodfrJ5uPaEz/cyJO/5jhMz6gU4L8vkViDhCapfI5ZCaPMerBVJ/KkGLA==}
 
   '@noble/curves@1.9.7':
     resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
@@ -1217,16 +1217,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mozaik-ai/cloud-sdk@0.0.3(@mozaik-ai/core@4.0.0-beta.12(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
+  '@mozaik-ai/cloud-sdk@0.0.3(@mozaik-ai/core@4.0.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
     optionalDependencies:
-      '@mozaik-ai/core': 4.0.0-beta.12(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      '@mozaik-ai/core': 4.0.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))
 
-  '@mozaik-ai/core@4.0.0-beta.12(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
+  '@mozaik-ai/core@4.0.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
     dependencies:
       '@anthropic-ai/sdk': 0.74.0(zod@4.5.4)
       '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.5.4)
-      '@mozaik-ai/cloud-sdk': 0.0.3(@mozaik-ai/core@4.0.0-beta.12(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
+      '@mozaik-ai/cloud-sdk': 0.0.3(@mozaik-ai/core@4.0.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
       dotenv: 17.4.2
       openai: 6.49.0(ws@7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.5.4)
       zod: 4.5.4

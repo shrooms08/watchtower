@@ -1,7 +1,20 @@
 # Mozaik 4.x notes (Watchtower)
 
-Verified against **`@mozaik-ai/core@4.0.0-beta.12`** (pinned exact) on Node 24.14.0 / pnpm 10.33.2,
-2026-09-02. Reference: `github.com/jigjoy-ai/mozaik-examples` (cloned to `reference/`, gitignored).
+Verified against **`@mozaik-ai/core@4.0.0`** (pinned exact) on Node 24.14.0 / pnpm 10.33.2,
+2026-09-03. Reference: `github.com/jigjoy-ai/mozaik-examples` (cloned to `reference/`, gitignored).
+
+**Upgraded from `4.0.0-beta.12` on 2026-09-03. `dist/index.mjs` is byte-identical between the two**
+(`diff` returns 0), so the stable release changes no runtime behaviour whatsoever: same event type
+strings, same transition shapes, same mappers, same bugs. The only difference is in `index.d.ts`:
+
+- **`ExecutableTransition` is now exported** as `type ExecutableTransition = LoopTransition<ExecutableLoopStateId>`,
+  and `InterceptionHandler` is declared in terms of it. Every example (and this project) previously
+  declared that alias locally; `src/participants/responder/interception/guardrail.ts` now imports it.
+
+That is the entire delta. **Every gotcha below still applies in 4.0.0** — none was fixed, because no
+runtime code changed. Re-verified explicitly after the upgrade: `ParticipantManifest` is still not
+exported (gotcha 1), `EventProcessor.process` still has no try/catch (gotcha 14), and the Anthropic
+`structuredOutput` mapper still sends `json_schema` (gotcha 17 / upstream issue #110, still open).
 
 **The docs site (docs.jigjoy.ai) describes 3.x and does not apply.** 4.x shares almost no API with
 it: there is no `AgenticEnvironment`, no `BaseParticipant`, no `runInference`/`sendMessage`
@@ -322,7 +335,7 @@ What that buys and what it costs:
   `src/report.ts` pairs per producer in arrival order. Peak concurrency itself is exact, because
   sweeping +1/-1 over the log needs no pairing.
 
-## Structured output is broken for Anthropic in 4.0.0-beta.12
+## Structured output is broken for Anthropic in 4.x
 
 `structuredOutput` (the `reference/mozaik-examples/structured-output` pattern) **cannot be used with
 `claude-haiku-4-5`**. `AnthropicMessagesMapper.toRequest` builds
@@ -340,7 +353,9 @@ output_config.format: Unexpected key 'json_schema'. The expected format is {"typ
 
 The feature exists on the Anthropic side; the mapper just names the field `json_schema` where the API
 wants `schema` — a one-word upstream fix, but it is a hard 400 today and, because `runLoop` never
-awaits, it arrives as an unhandled rejection rather than an error event. The OpenAI path is
+awaits, it arrives as an unhandled rejection rather than an error event. Reported upstream as
+[jigjoy-ai/mozaik#110](https://github.com/jigjoy-ai/mozaik/issues/110); **still present and
+unchanged in 4.0.0**, re-checked against the released bundle. The OpenAI path is
 unaffected, which is why every example that uses `structuredOutput` runs `gpt-5.4`.
 
 **Workaround in use:** ask for JSON in the prompt and parse tolerantly (`parseVerdict` in
@@ -355,7 +370,7 @@ otherwise poison an incident record.
 agent can run a different model. Watchtower reads three env vars in `src/models.ts`, each defaulting
 to `claude-haiku-4-5`: `MODEL_ANALYST`, `MODEL_BRIEFER`, `MODEL_RESPONDER` (see `.env.example`).
 
-The full set 4.0.0-beta.12 registers:
+The full set 4.0.0 registers:
 
 | Provider | Model names | Credential |
 | --- | --- | --- |
@@ -426,6 +441,10 @@ before switching: `structuredOutput` works on the Gemini path (`responseMimeType
     dispatch, outside any handler of ours, so `SafeProcessor` does not cover it. Wrap the body.
 21. **The public mainnet RPC held up fine** at 1 sampled `getParsedTransaction` per 3s: two 90s runs
     against Jupiter v6, ~4,000-4,500 logs each, 29 samples, **zero 429s and zero reconnects**. The
+    *websocket* is less reliable than the RPC: a later two-stream run saw both sockets go silent
+    mid-run and the staleness watchdog resubscribe each once (930 logs instead of ~42,000, still
+    zero 429s and zero RPC errors). Log volume from the public endpoint is not something to treat
+    as a stable number. The
     websocket firehose is free; only the sampled RPC fetches are rate-limit exposed, so the 1-in-flight
     + 3s spacing guard is what keeps it safe. Do not raise the sample rate without a paid endpoint.
 22. **`removeOnLogsListener` can block for over a minute.** It waits for an unsubscribe ack over the
@@ -461,3 +480,16 @@ before switching: `structuredOutput` works on the Gemini path (`responseMimeType
 29. **`handle()` is genuinely async and blocks only its own loop.** A 3s auto-reject wait holds that
     responder loop open while every other participant keeps producing — the guardrail never stalls the
     runtime, which is the same non-serialising behaviour as `runLoop` itself.
+
+## Gemini and function calling
+
+`GeminiGenerateContent`'s mapper **drops thought signatures entirely** — checked in the 4.0.0 bundle,
+which contains no `thoughtSignature` / `thought_signature` string at all. Outbound it writes
+`functionCall: { id, name, args }`; inbound it rebuilds items with
+`FunctionCallItem.rehydrate({ callId, name, args })`, whose shape has nowhere to put a signature. So a
+signature returned by a thinking model is neither stored nor echoed back on the next turn.
+
+This only matters if you point `MODEL_ANALYST` / `MODEL_RESPONDER` at a `gemini-*` model **and** the
+agent has tools: Google expects thought signatures returned with the function call they belong to, and
+this mapper cannot do that. Watchtower runs Anthropic everywhere, so it is unaffected today — but the
+Responder is the tool-using agent, and switching it to Gemini is the case to be careful about.
