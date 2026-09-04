@@ -14,7 +14,8 @@ strings, same transition shapes, same mappers, same bugs. The only difference is
 That is the entire delta. **Every gotcha below still applies in 4.0.0** — none was fixed, because no
 runtime code changed. Re-verified explicitly after the upgrade: `ParticipantManifest` is still not
 exported (gotcha 1), `EventProcessor.process` still has no try/catch (gotcha 14), and the Anthropic
-`structuredOutput` mapper still sends `json_schema` (gotcha 17 / upstream issue #110, still open).
+`structuredOutput` mapper still sends `json_schema` (gotcha 17 / upstream issue #110 — now closed by
+merged PR #111, but that fix is **not** in the 4.0.0 bundle we pin).
 
 **The docs site (docs.jigjoy.ai) describes 3.x and does not apply.** 4.x shares almost no API with
 it: there is no `AgenticEnvironment`, no `BaseParticipant`, no `runInference`/`sendMessage`
@@ -354,8 +355,10 @@ output_config.format: Unexpected key 'json_schema'. The expected format is {"typ
 The feature exists on the Anthropic side; the mapper just names the field `json_schema` where the API
 wants `schema` — a one-word upstream fix, but it is a hard 400 today and, because `runLoop` never
 awaits, it arrives as an unhandled rejection rather than an error event. Reported upstream as
-[jigjoy-ai/mozaik#110](https://github.com/jigjoy-ai/mozaik/issues/110); **still present and
-unchanged in 4.0.0**, re-checked against the released bundle. The OpenAI path is
+[jigjoy-ai/mozaik#110](https://github.com/jigjoy-ai/mozaik/issues/110) and fixed by
+[PR #111](https://github.com/jigjoy-ai/mozaik/pull/111), now merged. That fix has **not** shipped:
+the bug is still present and unchanged in the 4.0.0 bundle this project pins, re-checked against the
+released artifact. Revisit when a release after 4.0.0 lands; until then the JSON parser stays. The OpenAI path is
 unaffected, which is why every example that uses `structuredOutput` runs `gpt-5.4`.
 
 **Workaround in use:** ask for JSON in the prompt and parse tolerantly (`parseVerdict` in
@@ -493,3 +496,13 @@ This only matters if you point `MODEL_ANALYST` / `MODEL_RESPONDER` at a `gemini-
 agent has tools: Google expects thought signatures returned with the function call they belong to, and
 this mapper cannot do that. Watchtower runs Anthropic everywhere, so it is unaffected today — but the
 Responder is the tool-using agent, and switching it to Gemini is the case to be careful about.
+30. **A coalescing flag needs a drain that does not depend on a loop being in flight.** The Briefer
+    is rate limited to one brief per 8s, and a trigger inside that window sets `brieferDirty` for the
+    running loop's `model.answer` handler to pick up. That silently loses the update whenever the
+    trigger lands while *no* loop is running — a guardrail decision arriving three seconds after the
+    last brief finished set the flag with nothing left to clear it, and the brief never mentioned the
+    operator's decision at all. The drill still passed, because it asserted the guardrail chain
+    completed rather than that the outcome was reported. Two fixes, both needed: a single catch-up
+    timer scheduled at the end of the rate window (still one coalesced rerun, whichever path fires
+    first leaves the other a no-op), and a drill assertion that waits for the *brief* to state the
+    decision, not just for the decision to exist.
