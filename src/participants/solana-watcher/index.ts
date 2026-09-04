@@ -447,7 +447,7 @@ export function createSolanaWatcher(
 			const settled = await Promise.race([unsubscribed, sleep(config.unsubscribeTimeoutMs).then(() => false)]);
 
 			if (!settled) {
-				console.warn(`[${config.name}] unsubscribe did not ack within ${config.unsubscribeTimeoutMs / 1000}s, abandoning it`);
+				console.warn(`[${config.name}] unsubscribe timed out, abandoning socket`);
 			}
 		},
 	};

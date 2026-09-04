@@ -83,7 +83,7 @@ function coerceVerdict(value: unknown): Verdict | undefined {
  * API expects .schema, a hard 400), so the model is asked for JSON in the
  * prompt and the answer may arrive fenced or with prose around it.
  */
-export function parseVerdict(text: string): Verdict | undefined {
+export function parseJson<T>(text: string, coerce: (value: unknown) => T | undefined): T | undefined {
 	const trimmed = text.trim();
 	const candidates = [trimmed];
 
@@ -100,10 +100,10 @@ export function parseVerdict(text: string): Verdict | undefined {
 
 	for (const candidate of candidates) {
 		try {
-			const verdict = coerceVerdict(JSON.parse(candidate));
+			const parsed = coerce(JSON.parse(candidate));
 
-			if (verdict) {
-				return verdict;
+			if (parsed) {
+				return parsed;
 			}
 		} catch {
 			// try the next candidate
@@ -111,4 +111,8 @@ export function parseVerdict(text: string): Verdict | undefined {
 	}
 
 	return undefined;
+}
+
+export function parseVerdict(text: string): Verdict | undefined {
+	return parseJson(text, coerceVerdict);
 }

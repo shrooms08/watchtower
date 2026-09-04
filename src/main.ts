@@ -2,12 +2,21 @@ import "dotenv/config";
 import { modelSummary } from "./models";
 import { analyst } from "./participants/analyst";
 import { briefer } from "./participants/briefer";
+import { correlator } from "./participants/correlator";
 import { guardrail } from "./participants/guardrail";
 import { observer } from "./participants/observer";
 import { operator } from "./participants/operator";
 import { responder } from "./participants/responder";
 import { createWatcher, startWatcher } from "./participants/watcher";
-import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency, printGuardrailSection } from "./report";
+import {
+	formatOverlap,
+	inferenceIntervals,
+	overlaps,
+	peakConcurrency,
+	printBriefDecisionCheck,
+	printCorrelationsSection,
+	printGuardrailSection,
+} from "./report";
 import { EnvironmentState, initializeRuntime, join, resolveRuntime } from "./runtime";
 
 const MAX_INFERENCES = 12;
@@ -25,6 +34,7 @@ join(guardrail);
 join(operator);
 join(analyst);
 join(briefer);
+join(correlator);
 join(responder);
 
 const solanaWatcher = createWatcher("solana", 1500);
@@ -100,7 +110,9 @@ for (const incident of state.incidents) {
 }
 
 console.log(`Budget used:              ${state.inferenceBudget.used}/${state.inferenceBudget.max}`);
+printCorrelationsSection(state);
 printGuardrailSection(state);
+printBriefDecisionCheck(state);
 console.log(`Final brief:              ${state.brief.replace(/\s+/g, " ")}`);
 console.log("=".repeat(72));
 

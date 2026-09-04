@@ -2,15 +2,24 @@ import "dotenv/config";
 import { modelSummary } from "./models";
 import { analyst } from "./participants/analyst";
 import { briefer } from "./participants/briefer";
+import { correlator } from "./participants/correlator";
 import { guardrail } from "./participants/guardrail";
 import { observer } from "./participants/observer";
 import { operator } from "./participants/operator";
 import { responder } from "./participants/responder";
 import { createSolanaWatcher, SolanaWatcher, WATCHER_DEFAULTS } from "./participants/solana-watcher";
-import { formatOverlap, inferenceIntervals, overlaps, peakConcurrency, printGuardrailSection } from "./report";
+import {
+	formatOverlap,
+	inferenceIntervals,
+	overlaps,
+	peakConcurrency,
+	printBriefDecisionCheck,
+	printCorrelationsSection,
+	printGuardrailSection,
+} from "./report";
 import { EnvironmentState, initializeRuntime, join, resolveRuntime } from "./runtime";
 
-const MAX_INFERENCES = 8;
+const MAX_INFERENCES = 10;
 const RUN_MS = 90_000;
 
 const state = EnvironmentState.create(MAX_INFERENCES);
@@ -22,6 +31,7 @@ join(guardrail);
 join(operator);
 join(analyst);
 join(briefer);
+join(correlator);
 join(responder);
 
 // Two fully independent streams: own Connection, own websocket, own counters.
@@ -124,7 +134,9 @@ for (const incident of state.incidents) {
 	);
 }
 
+printCorrelationsSection(state);
 printGuardrailSection(state);
+printBriefDecisionCheck(state);
 console.log(`Final brief:              ${state.brief.replace(/\s+/g, " ")}`);
 console.log(`Overlapping pairs:        ${found.length}`);
 

@@ -1,8 +1,7 @@
 import { Agent, SituationContext, SituationHandler } from "@mozaik-ai/core";
-import { isolatedInput } from "../../../agent-context";
-import { MODEL_BRIEFER } from "../../../models";
-import { resolveRuntime, runLoop } from "../../../runtime";
+import { resolveRuntime } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
+import { brieferMayRun, runBrief } from "../brief";
 
 /**
  * Only the Risk Analyst's answers, never the briefer's own - otherwise every
@@ -14,40 +13,17 @@ export class AnalystAnsweredSpecification extends SafeSpecification {
 			return false;
 		}
 
-		const state = resolveRuntime().state;
-
-		if (context.event.producerId !== state.analystId) {
+		if (context.event.producerId !== resolveRuntime().state.analystId) {
 			return false;
 		}
 
-		const budget = state.inferenceBudget;
-
-		if (!budget.tryConsume()) {
-			console.log(`[briefer] budget exhausted (${budget.used}/${budget.max}) - brief not refreshed`);
-			return false;
-		}
-
-		return true;
+		return brieferMayRun("analyst answer");
 	}
 }
 
 export class RewriteBriefProcessor extends SafeProcessor {
 	protected run(context: SituationContext): void {
-		const agent = context.participant as Agent;
-		const { incidents } = resolveRuntime().state;
-		const summary = incidents.map(({ eventId, source, kind, severity, summary: reason }) => ({
-			eventId,
-			source,
-			kind,
-			severity,
-			reason,
-		}));
-
-		runLoop(
-			agent.getId(),
-			`Incidents so far: ${JSON.stringify(summary)}. Rewrite the ops brief in under 40 words, grouped by source stream.`,
-			isolatedInput(agent, MODEL_BRIEFER, 160),
-		);
+		runBrief(context.participant as Agent, "A new incident was assessed.");
 	}
 }
 

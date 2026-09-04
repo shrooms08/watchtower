@@ -30,6 +30,16 @@ export type Incident = {
 	summary: string;
 	severity: "low" | "medium" | "high" | "unknown";
 	correlated: boolean;
+	/** Epoch ms, so the correlator can take a time window over incidents. */
+	ts: number;
+};
+
+export type Correlation = {
+	id: string;
+	incidentIds: string[];
+	pattern: string;
+	confidence: "low" | "medium" | "high";
+	ts: string;
 };
 
 export type GuardrailAction = "pause_program" | "freeze_wallet" | "alert_operator";
@@ -84,6 +94,12 @@ export class EnvironmentState extends RuntimeState {
 	readonly decisions: GuardrailDecision[] = [];
 	readonly actions: ExecutedAction[] = [];
 	readonly responderAcks: ResponderAck[] = [];
+	readonly correlations: Correlation[] = [];
+	/** Sorted-id keys of incident sets already sent to the correlator. */
+	readonly correlatorSeen = new Set<string>();
+	correlatorLastRunTs = 0;
+	brieferLastRunTs = 0;
+	brieferDirty = false;
 	brief = "(no brief yet)";
 	analystId = "";
 	lastInferenceActivity = Date.now();
@@ -126,6 +142,15 @@ export class EnvironmentState extends RuntimeState {
 
 	recordAction(action: ExecutedAction): void {
 		this.actions.push(action);
+	}
+
+	/** Incidents recorded within `windowMs` of now, newest last. */
+	incidentsInWindow(windowMs: number, now: number = Date.now()): Incident[] {
+		return this.incidents.filter((incident) => now - incident.ts <= windowMs);
+	}
+
+	recordCorrelation(correlation: Correlation): void {
+		this.correlations.push(correlation);
 	}
 
 	inFlight(): number {

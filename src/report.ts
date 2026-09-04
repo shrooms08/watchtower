@@ -139,3 +139,30 @@ export function allRejectionsAcknowledged(state: {
 
 	return rejected.every((decision) => state.responderAcks.some((ack) => ack.ts >= Date.parse(decision.ts)));
 }
+
+/** Shared CORRELATIONS section. */
+export function printCorrelationsSection(state: {
+	correlations: readonly { id: string; incidentIds: string[]; pattern: string; confidence: string }[];
+}): void {
+	console.log("--- correlations ---");
+	console.log(`Cross-stream links:        ${state.correlations.length}`);
+
+	for (const correlation of state.correlations) {
+		console.log(
+			`  ${correlation.id} [${correlation.confidence}] ${correlation.incidentIds.join(" + ")}: ${correlation.pattern.replace(/\s+/g, " ")}`,
+		);
+	}
+}
+
+/** Does the brief actually say what the operator decided? */
+export function briefMentionsDecision(brief: string): boolean {
+	return /approved|rejected/i.test(brief);
+}
+
+export function printBriefDecisionCheck(state: { brief: string; decisions: readonly unknown[] }): void {
+	const mentions = briefMentionsDecision(state.brief);
+
+	console.log(
+		`Brief states the decision:  ${state.decisions.length === 0 ? "n/a (no decisions)" : mentions ? "yes" : "no"}`,
+	);
+}

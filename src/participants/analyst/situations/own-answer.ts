@@ -29,6 +29,7 @@ export class RecordIncidentProcessor extends SafeProcessor {
 				summary: text,
 				severity: "unknown",
 				correlated: false,
+				ts: Date.now(),
 			});
 			return;
 		}
@@ -49,6 +50,7 @@ export class RecordIncidentProcessor extends SafeProcessor {
 			summary: verdict.reason,
 			severity: verdict.severity,
 			correlated: source !== undefined,
+			ts: Date.now(),
 		});
 
 		console.log(
