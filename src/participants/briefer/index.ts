@@ -2,6 +2,7 @@ import { createAgent } from "@mozaik-ai/core";
 import { analystAnsweredHandler } from "./situations/analyst-answer";
 import { correlationFoundHandler } from "./situations/correlation-found";
 import { guardrailDecidedHandler } from "./situations/guardrail-decision";
+import { operatorQuestionHandler } from "./situations/operator-question";
 import { ownAnswerHandler } from "./situations/own-answer";
 
 export const briefer = createAgent({
@@ -9,5 +10,5 @@ export const briefer = createAgent({
 	capabilities: [],
 	instruction: "You maintain a live ops brief for a crypto protocol operator. Be terse.",
 	tools: [],
-	handlers: [analystAnsweredHandler, guardrailDecidedHandler, correlationFoundHandler, ownAnswerHandler],
+	handlers: [operatorQuestionHandler, analystAnsweredHandler, guardrailDecidedHandler, correlationFoundHandler, ownAnswerHandler],
 });

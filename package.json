@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "serve": "tsx src/server.ts",
+    "check:server": "tsx src/server-check.ts",
     "live": "tsx src/live.ts",
     "proof": "tsx src/main.ts",
     "drill": "tsx src/drill.ts",
@@ -17,10 +19,12 @@
   "dependencies": {
     "@mozaik-ai/core": "4.0.0",
     "@solana/web3.js": "^1.98.4",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },

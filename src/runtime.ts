@@ -73,6 +73,12 @@ export type ExecutedAction = {
 	ts: string;
 };
 
+export type OperatorAnswer = {
+	question: string;
+	answer: string;
+	ts: string;
+};
+
 export type ResponderAck = {
 	ts: number;
 	text: string;
@@ -100,6 +106,20 @@ export class EnvironmentState extends RuntimeState {
 	correlatorLastRunTs = 0;
 	brieferLastRunTs = 0;
 	brieferDirty = false;
+	/** Brief loops (not question loops) currently awaiting an answer. */
+	brieferBriefsInFlight = 0;
+	readonly pendingOperatorQuestions: string[] = [];
+	readonly operatorAnswers: OperatorAnswer[] = [];
+	/** Analyst dispatch timestamps, for the rolling per-minute limit. */
+	readonly analystRuns: number[] = [];
+	/** Infinity outside the server: the scripts are bounded by the budget alone. */
+	analystPerMin = Number.POSITIVE_INFINITY;
+	analystRateLimitedCount = 0;
+	/**
+	 * Set by whoever owns the watcher handles (the server). Kept as a function so
+	 * the runtime never has to import the watcher module.
+	 */
+	watcherStatsProvider: (() => unknown[]) | undefined;
 	brief = "(no brief yet)";
 	analystId = "";
 	lastInferenceActivity = Date.now();
@@ -114,8 +134,36 @@ export class EnvironmentState extends RuntimeState {
 		super();
 	}
 
-	static create(maxInferences: number): EnvironmentState {
-		return new EnvironmentState(new InferenceBudget(maxInferences));
+	static create(maxInferences: number, analystPerMin?: number): EnvironmentState {
+		const state = new EnvironmentState(new InferenceBudget(maxInferences));
+
+		if (analystPerMin !== undefined && Number.isFinite(analystPerMin)) {
+			state.analystPerMin = analystPerMin;
+		}
+
+		return state;
+	}
+
+	watcherStats(): unknown[] {
+		return this.watcherStatsProvider?.() ?? [];
+	}
+
+	/** Rolling 60s window. Claims a slot when it returns true. */
+	analystMayRun(now: number = Date.now()): boolean {
+		while (this.analystRuns.length > 0 && now - this.analystRuns[0]! > 60_000) {
+			this.analystRuns.shift();
+		}
+
+		if (this.analystRuns.length >= this.analystPerMin) {
+			return false;
+		}
+
+		this.analystRuns.push(now);
+		return true;
+	}
+
+	analystUsedThisMinute(now: number = Date.now()): number {
+		return this.analystRuns.filter((ts) => now - ts <= 60_000).length;
 	}
 
 	addPending(pending: PendingApproval): void {

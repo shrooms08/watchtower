@@ -128,6 +128,8 @@ export function runBrief(agent: Agent, lead: string): void {
 		addenda.push("State the operator's decision explicitly in the brief.");
 	}
 
+	state.brieferBriefsInFlight++;
+
 	const limit = addenda.length > 0 ? 60 : 40;
 	const message =
 		`${lead}\n` +

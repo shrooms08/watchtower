@@ -27,6 +27,17 @@ export class RiskyChainEventSpecification extends SafeSpecification {
 		}
 
 		const state = resolveRuntime().state;
+
+		// The per-minute ceiling is checked before the budget so a rate-limited
+		// event does not silently spend a slot it will never use.
+		if (!state.analystMayRun()) {
+			state.analystRateLimitedCount++;
+			console.log(
+				`[analyst] rate-limited (${state.analystUsedThisMinute()}/${state.analystPerMin} this minute) - ${payload.kind} logged, no inference`,
+			);
+			return false;
+		}
+
 		const budget = state.inferenceBudget;
 
 		if (!budget.tryConsume()) {

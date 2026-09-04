@@ -14,12 +14,12 @@ import { resolveRuntime, sendEvent } from "../../../runtime";
 import type { GuardrailAction, GuardrailDecision } from "../../../runtime";
 import { guardrail } from "../../guardrail";
 
-export type GuardrailMode = "auto-reject" | "auto-approve" | "prompt";
+export type GuardrailMode = "auto-reject" | "auto-approve" | "prompt" | "ui";
 
 export function guardrailMode(): GuardrailMode {
 	const mode = process.env.GUARDRAIL_MODE;
 
-	return mode === "auto-approve" || mode === "prompt" ? mode : "auto-reject";
+	return mode === "auto-approve" || mode === "prompt" || mode === "ui" ? mode : "auto-reject";
 }
 
 const AUTO_REJECT_DELAY_MS = 3_000;
@@ -153,7 +153,42 @@ export class GuardrailInterceptionHandler implements InterceptionHandler {
 			return auto("rejected", "GUARDRAIL_MODE=auto-reject, no operator approval");
 		}
 
+		if (mode === "ui") {
+			return this.awaitUiDecision(pendingId, incidentId);
+		}
+
 		return this.promptForDecision(pendingId, incidentId);
+	}
+
+	/**
+	 * Waits for a decision recorded in shared state - by the HTTP endpoint or by
+	 * an Operator /approve|/reject message - and rejects if none arrives. Both
+	 * routes land in the same place, so the UI and the chat command cannot
+	 * disagree about what was decided.
+	 */
+	private async awaitUiDecision(pendingId: string, incidentId: string): Promise<GuardrailDecision> {
+		const state = resolveRuntime().state;
+		const timeoutMs = Number(process.env.GUARDRAIL_TIMEOUT_MS ?? 120_000);
+		const deadline = Date.now() + timeoutMs;
+
+		while (Date.now() < deadline) {
+			const recorded = state.decisionFor(pendingId);
+
+			if (recorded) {
+				return recorded;
+			}
+
+			await sleep(PROMPT_POLL_MS);
+		}
+
+		return {
+			pendingId,
+			incidentId,
+			decision: "rejected",
+			by: "auto",
+			ts: new Date().toISOString(),
+			note: "timed out waiting for operator",
+		};
 	}
 
 	/**

@@ -13,10 +13,24 @@ export class StoreBriefProcessor extends SafeProcessor {
 	protected run(context: SituationContext): void {
 		const { answer } = context.event.payload as { answer: ModelMessageItem };
 		const state = resolveRuntime().state;
-		const brief = answer.content.text.trim();
+		const text = answer.content.text.trim();
 
-		state.brief = brief;
-		console.log(`[briefer] brief updated: ${brief.replace(/\s+/g, " ")}`);
+		// A pending question claims this answer: it is a reply to the operator,
+		// never the rolling brief, so state.brief is left alone.
+		const question = state.pendingOperatorQuestions.shift();
+
+		if (question !== undefined) {
+			state.operatorAnswers.push({ question, answer: text, ts: new Date().toISOString() });
+			console.log(`[briefer] answered operator: ${text.replace(/\s+/g, " ")}`);
+			return;
+		}
+
+		if (state.brieferBriefsInFlight > 0) {
+			state.brieferBriefsInFlight--;
+		}
+
+		state.brief = text;
+		console.log(`[briefer] brief updated: ${text.replace(/\s+/g, " ")}`);
 
 		if (!state.brieferDirty) {
 			return;
