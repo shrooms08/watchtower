@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Watchtower — security ops</title>
+    <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -37,7 +38,8 @@
         display: flex; align-items: center; gap: 28px; padding: 0 20px;
         height: 52px; border-bottom: 1px solid var(--line); overflow: hidden; min-width: 0;
       }
-      .brand { display: flex; align-items: baseline; gap: 10px; flex: none; }
+      .brand { display: flex; align-items: center; gap: 10px; flex: none; }
+      .brand img { width: 24px; height: 24px; display: block; flex: none; }
       .brand b { font-size: 13px; font-weight: 500; letter-spacing: 0.28em; }
       .brand span { font-size: 8px; letter-spacing: 0.3em; color: var(--lo); }
       .stat { display: flex; align-items: center; gap: 7px; flex: none; }
@@ -162,7 +164,7 @@
   <body>
     <div id="app">
       <header>
-        <div class="brand"><b>WATCHTOWER</b><span>SECURITY OPS</span></div>
+        <div class="brand"><img src="/brand/mark-transparent.svg" alt="" /><b>WATCHTOWER</b><span>SECURITY OPS</span></div>
         <div class="stat"><span class="dot" id="connDot"></span><span class="k" id="connLabel">CONNECTING</span></div>
         <div class="stat"><span class="k">UPTIME</span><span class="v" id="uptime">0s</span></div>
         <div class="stat"><span class="k">BUDGET</span><span class="v" id="budget">0/0</span></div>

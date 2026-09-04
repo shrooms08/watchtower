@@ -224,6 +224,39 @@ const server = createServer((request, response) => {
 				return;
 			}
 
+			if (request.method === "GET" && url.pathname.startsWith("/brand/")) {
+				const name = url.pathname.slice("/brand/".length);
+
+				// No traversal: a flat allow-listed filename or nothing.
+				if (!/^[A-Za-z0-9._-]+$/.test(name) || name.includes("..")) {
+					sendJson(response, 404, { ok: false, error: "not found" });
+					return;
+				}
+
+				const types: Record<string, string> = {
+					".svg": "image/svg+xml",
+					".png": "image/png",
+					".ico": "image/x-icon",
+					".webp": "image/webp",
+				};
+				const extension = name.slice(name.lastIndexOf("."));
+
+				try {
+					const file = await readFile(joinPath(process.cwd(), "public", "brand", name));
+
+					response.writeHead(200, {
+						...CORS,
+						"content-type": types[extension] ?? "application/octet-stream",
+						"cache-control": "public, max-age=3600",
+					});
+					response.end(file);
+				} catch {
+					sendJson(response, 404, { ok: false, error: "not found" });
+				}
+
+				return;
+			}
+
 			if (request.method === "GET" && url.pathname === "/api/state") {
 				sendJson(response, 200, snapshot());
 				return;
