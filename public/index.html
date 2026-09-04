@@ -3,133 +3,1038 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Watchtower — test page</title>
+    <title>Watchtower — security ops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      body { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 16px; background: #111; color: #ddd; }
-      h1 { font-size: 15px; margin: 0 0 12px; }
-      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #888; margin: 16px 0 6px; }
-      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-      #events { height: 60vh; overflow: auto; border: 1px solid #333; padding: 8px; background: #0b0b0b; }
-      .ev { border-bottom: 1px solid #1e1e1e; padding: 2px 0; white-space: pre-wrap; word-break: break-word; }
-      .t { color: #6cf; } .p { color: #9d7; } .k { color: #fa6; }
-      #brief { border: 1px solid #333; padding: 8px; background: #0b0b0b; min-height: 60px; white-space: pre-wrap; }
-      .pending { border: 1px solid #553; padding: 6px; margin-bottom: 6px; background: #161206; }
-      button { font: inherit; background: #222; color: #ddd; border: 1px solid #444; padding: 3px 8px; cursor: pointer; }
-      button:hover { background: #2c2c2c; }
-      input { font: inherit; background: #0b0b0b; color: #ddd; border: 1px solid #444; padding: 4px; width: 70%; }
-      #status { color: #888; }
+      :root {
+        --hi: rgba(255, 255, 255, 0.9);
+        --mid: rgba(255, 255, 255, 0.55);
+        --lo: rgba(255, 255, 255, 0.3);
+        --line: rgba(255, 255, 255, 0.12);
+        --amber: #e8a33d;
+        --red: #ff2d2d;
+        --cool: #5aa9e6;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: #000;
+        color: var(--hi);
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 300;
+        font-size: 11px;
+        overflow: hidden;
+      }
+      #app { height: 100vh; width: 100vw; overflow: hidden; display: grid; grid-template-columns: 100%; grid-template-rows: 52px minmax(0, 1fr) auto; }
+
+      /* header */
+      header {
+        display: flex; align-items: center; gap: 28px; padding: 0 20px;
+        height: 52px; border-bottom: 1px solid var(--line); overflow: hidden; min-width: 0;
+      }
+      .brand { display: flex; align-items: baseline; gap: 10px; flex: none; }
+      .brand b { font-size: 13px; font-weight: 500; letter-spacing: 0.28em; }
+      .brand span { font-size: 8px; letter-spacing: 0.3em; color: var(--lo); }
+      .stat { display: flex; align-items: center; gap: 7px; flex: none; }
+      .stat .k { font-size: 8px; letter-spacing: 0.24em; color: var(--lo); }
+      .stat .v { font-size: 11px; color: var(--hi); }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); flex: none; }
+      .dot.on { background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.75); animation: pulse 1.4s ease-in-out infinite; }
+      .dot.cool { background: var(--cool); box-shadow: 0 0 10px rgba(90, 169, 230, 0.8); }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+      .spacer { flex: 1 1 auto; min-width: 0; }
+      button {
+        font: inherit; font-size: 8px; letter-spacing: 0.18em; color: var(--mid);
+        background: transparent; border: 1px solid var(--line); padding: 4px 9px; cursor: pointer;
+      }
+      button:hover { color: #fff; border-color: rgba(255, 255, 255, 0.32); }
+
+      /* main */
+      main { display: grid; grid-template-columns: 340px minmax(0, 1fr) 400px; min-height: 0; min-width: 0; overflow: hidden; }
+      .col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+      .col.left { border-right: 1px solid var(--line); }
+      .col.right { border-left: 1px solid var(--line); }
+      .phead {
+        padding: 12px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; flex: none;
+      }
+      .phead .t { font-size: 9px; letter-spacing: 0.24em; color: var(--mid); }
+      .phead .n { font-size: 8px; letter-spacing: 0.18em; color: var(--lo); }
+      .scroll { overflow-y: auto; min-height: 0; flex: 1; }
+      .scroll::-webkit-scrollbar { width: 6px; }
+      .scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); }
+      .empty { padding: 22px 16px; font-size: 9px; letter-spacing: 0.18em; color: var(--lo); }
+
+      /* lanes */
+      .lane { padding: 9px 16px 10px; border-top: 1px solid var(--line); }
+      .lane:first-child { border-top: none; }
+      .lane .top { display: flex; align-items: center; gap: 9px; }
+      .lane .nm { font-size: 11px; letter-spacing: 0.1em; color: var(--mid); }
+      .lane.live .nm { color: #fff; }
+      .lane .tag { font-size: 8px; letter-spacing: 0.16em; color: var(--lo); border: 1px solid var(--line); padding: 1px 5px; }
+      .lane .cnt { font-size: 9px; color: var(--lo); margin-left: auto; letter-spacing: 0.12em; }
+      .lane.busy .cnt { color: #fff; }
+      .lane .evs { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+      .lane .ev { display: flex; gap: 8px; align-items: baseline; }
+      .lane .ev .ty { font-size: 9px; letter-spacing: 0.1em; color: var(--lo); flex: none; }
+      .lane .ev .tx { font-size: 10px; color: var(--mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+      .lane .ev.faint .tx { color: var(--lo); }
+
+      /* centre */
+      .col.centre { min-width: 0; }
+      #sphereWrap { position: relative; flex: 0 0 60%; min-height: 0; border-bottom: 1px solid var(--line); }
+      #sphere { display: block; width: 100%; height: 100%; }
+      .corner { position: absolute; display: flex; gap: 22px; pointer-events: none; font-size: 8px; letter-spacing: 0.22em; color: var(--lo); }
+      .corner .v { color: var(--mid); }
+      .tl { top: 10px; left: 20px; } .tr { top: 10px; right: 20px; }
+      .bl { bottom: 10px; left: 20px; } .br { bottom: 10px; right: 20px; }
+      #centreRead { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+      #centreRead .k { font-size: 8px; letter-spacing: 0.3em; color: var(--lo); }
+      #inflight { font-size: 46px; font-weight: 300; line-height: 1; margin: 3px 0; letter-spacing: -0.02em; }
+      #bandLabels { position: absolute; inset: 0; pointer-events: none; }
+      .band { position: absolute; font-size: 7.5px; letter-spacing: 0.18em; white-space: nowrap; transform: translate(-50%, -50%); }
+      #lower { flex: 1 1 40%; min-height: 0; overflow-y: auto; }
+
+      .row { padding: 9px 16px 10px; border-top: 1px solid var(--line); }
+      .row:first-child { border-top: none; }
+      .row .l1 { display: flex; align-items: baseline; gap: 9px; }
+      .sev { font-size: 8px; letter-spacing: 0.16em; border: 1px solid var(--line); padding: 1px 5px; flex: none; }
+      .sev.high { color: var(--red); border-color: rgba(255, 45, 45, 0.45); }
+      .sev.medium { color: var(--amber); border-color: rgba(232, 163, 61, 0.45); }
+      .sev.low, .sev.unknown { color: var(--mid); }
+      .row .id { font-size: 10px; color: var(--mid); letter-spacing: 0.08em; }
+      .row .src { font-size: 9px; color: var(--lo); }
+      .row .when { font-size: 9px; color: var(--lo); margin-left: auto; }
+      .row .txt { margin-top: 5px; font-size: 10px; line-height: 1.55; color: var(--mid); }
+      .linked { font-size: 8px; letter-spacing: 0.16em; color: var(--cool); border: 1px solid rgba(90, 169, 230, 0.4); padding: 1px 5px; }
+
+      /* right column */
+      #brief { padding: 4px 16px 14px; }
+      #brief .h1 { font-size: 12px; letter-spacing: 0.22em; color: #fff; margin: 14px 0 6px; }
+      #brief .h2 { font-size: 11px; letter-spacing: 0.22em; color: #fff; margin: 14px 0 6px; }
+      #brief .h3 { font-size: 9px; letter-spacing: 0.22em; color: var(--mid); margin: 12px 0 4px; }
+      #brief .li { font-size: 11px; line-height: 1.6; color: var(--mid); padding-left: 14px; margin-top: 3px; border-left: 1px solid var(--line); text-wrap: pretty; }
+      #brief .p { font-size: 11px; line-height: 1.6; color: var(--mid); margin-top: 6px; text-wrap: pretty; }
+      #brief b { color: #fff; font-weight: 500; }
+      .pend { padding: 10px 16px 11px; border-top: 1px solid var(--line); }
+      .pend .act { font-size: 11px; color: #fff; letter-spacing: 0.06em; }
+      .pend .tgt { font-size: 10px; color: var(--mid); margin-top: 3px; word-break: break-all; }
+      .pend .rsn { font-size: 10px; color: var(--lo); margin-top: 4px; line-height: 1.5; }
+      .pend .btns { margin-top: 8px; display: flex; gap: 8px; }
+      .pend button.ok:hover { color: var(--cool); border-color: rgba(90, 169, 230, 0.5); }
+      .pend button.no:hover { color: var(--red); border-color: rgba(255, 45, 45, 0.5); }
+      .dec { padding: 7px 16px 8px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: baseline; }
+      .dec .w { font-size: 9px; letter-spacing: 0.14em; }
+      .dec .w.approved { color: var(--cool); } .dec .w.rejected { color: var(--red); }
+      .dec .m { font-size: 9px; color: var(--lo); margin-left: auto; }
+      #askRow { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; gap: 8px; flex: none; }
+      #ask {
+        flex: 1; min-width: 0; font: inherit; font-size: 10px; background: transparent; color: #fff;
+        border: 1px solid var(--line); padding: 5px 8px;
+      }
+      #ask:focus { outline: none; border-color: rgba(255, 255, 255, 0.3); }
+      .qa { padding: 9px 16px 10px; border-top: 1px solid var(--line); }
+      .qa .q { font-size: 10px; color: var(--mid); }
+      .qa .q i { color: var(--lo); font-style: normal; }
+      .qa .a { font-size: 10px; line-height: 1.55; color: #fff; margin-top: 4px; }
+
+      /* log */
+      #logPanel { border-top: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+      #logHead { padding: 8px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; flex: none; }
+      #logHead .t { font-size: 9px; letter-spacing: 0.24em; color: var(--mid); }
+      #logHead .n { font-size: 8px; letter-spacing: 0.18em; color: var(--lo); }
+      #logHead .chev { margin-left: auto; font-size: 9px; color: var(--lo); }
+      #log { height: 168px; overflow-y: auto; overflow-x: hidden; padding: 0 20px 10px; font-size: 10px; }
+      #logPanel.closed #log { display: none; }
+      .lg { display: flex; gap: 12px; padding: 1px 0; white-space: nowrap; min-width: 0; }
+      .lg .t { color: var(--lo); flex: none; }
+      .lg .ty { color: var(--mid); flex: none; width: 152px; overflow: hidden; text-overflow: ellipsis; }
+      .lg .pr { color: var(--lo); flex: none; width: 116px; overflow: hidden; text-overflow: ellipsis; }
+      .lg .tx { color: var(--mid); overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+      .lg.faint .ty, .lg.faint .pr, .lg.faint .tx { color: rgba(255, 255, 255, 0.22); }
+      .lg.high .tx { color: var(--red); } .lg.medium .tx { color: var(--amber); } .lg.cool .tx { color: var(--cool); }
     </style>
   </head>
   <body>
-    <h1>Watchtower <span id="status">connecting…</span></h1>
+    <div id="app">
+      <header>
+        <div class="brand"><b>WATCHTOWER</b><span>SECURITY OPS</span></div>
+        <div class="stat"><span class="dot" id="connDot"></span><span class="k" id="connLabel">CONNECTING</span></div>
+        <div class="stat"><span class="k">UPTIME</span><span class="v" id="uptime">0s</span></div>
+        <div class="stat"><span class="k">BUDGET</span><span class="v" id="budget">0/0</span></div>
+        <div class="stat"><span class="k">ANALYST RATE</span><span class="v" id="rate">0/0</span></div>
+        <div class="spacer"></div>
+        <div class="stat" id="streamStats"></div>
+        <div class="stat">
+          <button id="drill1">DRILL SINGLE</button>
+          <button id="drill2">DRILL MULTI</button>
+        </div>
+      </header>
 
-    <div>
-      <button id="drill-single">Drill single</button>
-      <button id="drill-multi">Drill multi</button>
-      <span id="meta"></span>
-    </div>
-
-    <div class="cols">
-      <div>
-        <h2>Events</h2>
-        <div id="events"></div>
-      </div>
-      <div>
-        <h2>Brief</h2>
-        <div id="brief">—</div>
-
-        <h2>Pending approvals</h2>
-        <div id="pending">none</div>
-
-        <h2>Ask the briefer</h2>
-        <div>
-          <input id="question" placeholder="what happened in the drill?" />
-          <button id="ask">Send</button>
+      <main>
+        <div class="col left">
+          <div class="phead"><span class="t">PARTICIPANTS</span><span class="n">8 PARTICIPANTS</span></div>
+          <div class="scroll" id="lanes"></div>
         </div>
 
-        <h2>Operator answers</h2>
-        <div id="answers">—</div>
+        <div class="col centre">
+          <div id="sphereWrap">
+            <canvas id="sphere"></canvas>
+            <div id="bandLabels"></div>
+            <div class="corner tl"><span>THE SPHERE</span></div>
+            <div class="corner tr"><span>POINTS <span class="v" id="ptLabel">0</span></span><span>FPS <span class="v" id="fpsLabel">60</span></span></div>
+            <div class="corner bl"><span>PARTICLES <span class="v" id="prtLabel">0</span></span><span>SEQ <span class="v" id="seqLabel">0</span></span></div>
+            <div class="corner br"><span>TURBULENCE <span class="v" id="turbLabel">0.00</span></span><span>EVENTS <span class="v" id="evLabel">0</span></span></div>
+            <div id="centreRead">
+              <div class="k">IN FLIGHT</div>
+              <div id="inflight">0</div>
+              <div class="k">PEAK <span id="peak">0</span></div>
+            </div>
+          </div>
+          <div id="lower">
+            <div class="phead"><span class="t">INCIDENTS</span><span class="n" id="incN">0</span></div>
+            <div id="incidents"></div>
+            <div class="phead"><span class="t">CORRELATIONS</span><span class="n" id="corN">0</span></div>
+            <div id="correlations"></div>
+          </div>
+        </div>
+
+        <div class="col right">
+          <div class="phead"><span class="t">BRIEF</span><span class="n" id="briefTs"></span></div>
+          <div class="scroll">
+            <div id="brief"><div class="empty">BRIEFER HAS NOT SPOKEN YET.</div></div>
+            <div class="phead"><span class="t">PENDING APPROVALS</span><span class="n" id="pendN">0</span></div>
+            <div id="pending"></div>
+            <div id="decided"></div>
+          </div>
+          <div class="phead" style="border-top: 1px solid var(--line)"><span class="t">ASK THE BRIEFER</span></div>
+          <div id="askRow">
+            <input id="ask" placeholder="what is happening on jupiter?" />
+            <button id="send">SEND</button>
+          </div>
+          <div id="qa" style="max-height: 176px; overflow-y: auto"></div>
+        </div>
+      </main>
+
+      <div id="logPanel">
+        <div id="logHead">
+          <span class="t">EVENT LOG</span><span class="n" id="logN">0</span><span class="chev" id="chev">▾</span>
+        </div>
+        <div id="log"><div class="empty">WAITING FOR ENVELOPES.</div></div>
       </div>
     </div>
 
     <script>
-      const api = (path, body) =>
-        fetch(path, {
-          method: body ? "POST" : "GET",
-          headers: { "content-type": "application/json" },
-          body: body ? JSON.stringify(body) : undefined,
-        }).then((r) => r.json());
+      "use strict";
 
-      const eventsEl = document.getElementById("events");
-      const briefEl = document.getElementById("brief");
-      const pendingEl = document.getElementById("pending");
-      const answersEl = document.getElementById("answers");
-      const metaEl = document.getElementById("meta");
-      const statusEl = document.getElementById("status");
+      /* ---------------- config ---------------- */
 
-      function addEvent(e) {
-        const div = document.createElement("div");
-        div.className = "ev";
-        const kind = e.payload && e.payload.kind ? ` [${e.payload.kind}]` : "";
-        const body = JSON.stringify(e.payload).slice(0, 220);
-        div.innerHTML =
-          `<span class="t">${e.ts.slice(11, 19)}</span> ` +
-          `<span class="k">${e.type}</span>${kind} ` +
-          `<span class="p">${e.producer}</span> (inflight ${e.inflight}) ${body}`;
-        eventsEl.appendChild(div);
-        while (eventsEl.children.length > 600) eventsEl.removeChild(eventsEl.firstChild);
-        eventsEl.scrollTop = eventsEl.scrollHeight;
+      const QS = new URLSearchParams(location.search);
+      const MOCK = QS.get("mock") === "1" || QS.get("mock") === "true";
+      const ORIGIN = location.origin && location.origin !== "null" ? location.origin : "http://localhost:4400";
+      const API_URL = QS.get("api") || ORIGIN;
+      const WS_URL = (API_URL.startsWith("https") ? "wss" : "ws") + "://" + API_URL.replace(/^https?:\/\//, "") + "/ws";
+
+      const WHITE_MID = "rgba(255,255,255,0.55)";
+      const AMBER = "#E8A33D";
+      const RED = "#FF2D2D";
+      const COOL = "#5AA9E6";
+
+      const HIDDEN = ["Observer", "UI Observer"];
+      const PARTS = [
+        { name: "Jupiter Stream", cls: "watcher", tag: "WATCH" },
+        { name: "Pumpfun Stream", cls: "watcher", tag: "WATCH" },
+        { name: "Risk Analyst", cls: "agent", tag: "AGENT" },
+        { name: "Correlator", cls: "agent", tag: "AGENT" },
+        { name: "Briefer", cls: "agent", tag: "AGENT" },
+        { name: "Responder", cls: "agent", tag: "AGENT" },
+        { name: "Guardrail", cls: "gate", tag: "HUMAN" },
+        { name: "Operator", cls: "gate", tag: "HUMAN" },
+      ];
+      const IDX = {};
+      PARTS.forEach((p, i) => (IDX[p.name] = i));
+      const NB = PARTS.length;
+
+      // Drill sources are not participants; fold them onto the analyst band.
+      function bandOf(producer) {
+        if (IDX[producer] !== undefined) return IDX[producer];
+        if (/^Drill/.test(producer)) return IDX["Risk Analyst"];
+        return undefined;
       }
 
-      function renderState(s) {
-        briefEl.textContent = s.brief || "—";
-        metaEl.textContent =
-          ` budget ${s.budget.used}/${s.budget.max} · analyst ${s.analystRate.usedThisMinute}/${s.analystRate.max}/min` +
-          ` · up ${s.uptimeSeconds}s · ` +
-          (s.watcherStats || []).map((w) => `${w.name}: ${w.logs} logs`).join(" · ");
+      const FLOW = {
+        "chain.event": ["Risk Analyst"],
+        "model.answer": ["Briefer", "Correlator", "Responder"],
+        "correlation.found": ["Briefer"],
+        "guardrail.pending": ["Operator", "Briefer"],
+        "guardrail.decision": ["Responder", "Briefer"],
+        "message.sent": ["Briefer"],
+        "function_call.started": ["Guardrail"],
+        "function_call.completed": ["Briefer"],
+        "interception.started": ["Guardrail", "Operator"],
+        "interception.finished": ["Briefer"],
+      };
 
-        pendingEl.innerHTML = "";
-        if (!s.pendingApprovals.length) pendingEl.textContent = "none";
-        for (const p of s.pendingApprovals) {
-          const div = document.createElement("div");
-          div.className = "pending";
-          div.innerHTML = `<b>${p.pendingId}</b> ${p.action} → ${p.target}<br/><i>${p.reason}</i><br/>`;
-          for (const decision of ["approved", "rejected"]) {
-            const b = document.createElement("button");
-            b.textContent = decision === "approved" ? "Approve" : "Reject";
-            b.onclick = () => api("/api/guardrail/decision", { pendingId: p.pendingId, decision }).then(refresh);
-            div.appendChild(b);
+      const pad = (n) => (n < 10 ? "0" + n : "" + n);
+      const hhmmss = (ts) => {
+        const d = ts ? new Date(ts) : new Date();
+        return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+      };
+      const pick = (a) => a[Math.floor(Math.random() * a.length)];
+      const rnd = (a, b) => a + Math.random() * (b - a);
+      const shortNum = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : "" + Math.round(n));
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      const severityFor = (kind, sol) =>
+        kind === "authority_change" ? "high" : kind === "large_transfer" ? (sol > 4000 ? "high" : "medium") : kind === "failed_burst" ? "medium" : "low";
+
+      /* ---------------- store ---------------- */
+
+      const st = {
+        connected: false,
+        status: "connecting",
+        inflight: 0,
+        peak: 0,
+        seq: 0,
+        events: 0,
+        perProducer: {},
+        laneEvents: {},
+        lastEmit: {},
+        incidents: [],
+        correlations: [],
+        brief: "",
+        briefTs: null,
+        pending: [],
+        decisions: [],
+        qa: [],
+        budget: { used: 0, max: 0 },
+        analystRate: { usedThisMinute: 0, max: 0 },
+        watcherStats: [],
+        uptimeSeconds: 0,
+        log: [],
+      };
+      PARTS.forEach((p) => { st.laneEvents[p.name] = []; st.perProducer[p.name] = 0; });
+
+      let dirty = true;
+      let logHeld = false;
+      let logOpen = true;
+
+      /* ---------------- transport ---------------- */
+
+      let ws = null, backoff = 600, pollTimer = null, reconnectTimer = null;
+
+      function connect() {
+        st.status = "connecting"; dirty = true;
+        try { ws = new WebSocket(WS_URL); } catch (e) { return scheduleReconnect(); }
+        ws.onopen = () => {
+          backoff = 600; st.connected = true; st.status = "live"; dirty = true;
+          pollState();
+          clearInterval(pollTimer);
+          pollTimer = setInterval(pollState, 8000);
+        };
+        ws.onmessage = (e) => {
+          let msg; try { msg = JSON.parse(e.data); } catch (err) { return; }
+          if (msg && msg.type === "hello" && msg.state) applyState(msg.state);
+          else if (Array.isArray(msg)) msg.forEach(ingest);
+          else if (msg && msg.seq !== undefined) ingest(msg);
+        };
+        ws.onclose = () => {
+          st.connected = false; st.status = "reconnecting"; clearInterval(pollTimer); dirty = true; scheduleReconnect();
+        };
+        ws.onerror = () => { try { ws.close(); } catch (err) {} };
+      }
+      function scheduleReconnect() {
+        backoff = Math.min(backoff * 1.7, 15000);
+        st.status = "reconnecting"; dirty = true;
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, backoff);
+      }
+      function pollState() {
+        fetch(API_URL + "/api/state").then((r) => r.json()).then(applyState).catch(() => {});
+      }
+      let pollSoonTimer = null;
+      function pollSoon() {
+        if (MOCK || pollSoonTimer) return;
+        pollSoonTimer = setTimeout(() => { pollSoonTimer = null; pollState(); }, 700);
+      }
+      function post(path, body) {
+        if (MOCK) return Promise.resolve({});
+        return fetch(API_URL + path, {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+        }).then((r) => r.json()).catch(() => ({}));
+      }
+
+      // The server is authoritative: every list is replaced, never merged.
+      function applyState(s) {
+        if (!s) return;
+        if (s.incidents) st.incidents = s.incidents.slice().reverse();
+        if (s.correlations) st.correlations = s.correlations.slice().reverse();
+        if (typeof s.brief === "string" && s.brief && s.brief !== st.brief) { st.brief = s.brief; st.briefTs = new Date().toISOString(); }
+        if (s.pendingApprovals) st.pending = s.pendingApprovals.slice();
+        if (s.decisions) st.decisions = s.decisions.slice().reverse();
+        if (s.budget) st.budget = s.budget;
+        if (s.analystRate) st.analystRate = s.analystRate;
+        if (Array.isArray(s.watcherStats)) st.watcherStats = s.watcherStats;
+        if (typeof s.uptimeSeconds === "number") st.uptimeSeconds = s.uptimeSeconds;
+        if (Array.isArray(s.operatorAnswers)) {
+          st.qa = s.operatorAnswers.slice().reverse().map((a) => ({ q: a.question, a: a.answer, t: hhmmss(a.ts) }));
+        }
+        dirty = true;
+      }
+
+      /* ---------------- ingestion ---------------- */
+
+      function describe(env) {
+        const p = env.payload || {};
+        switch (env.type) {
+          case "chain.event":
+            if (p.kind === "normal") return "heartbeat " + (p.detail || "");
+            if (p.kind === "failed_burst") return "failed burst " + (p.detail || "");
+            if (p.kind === "large_transfer") return (p.amountSol ? shortNum(p.amountSol) + " SOL " : "") + (p.detail || "");
+            if (p.kind === "authority_change") return "authority change " + (p.detail || "");
+            return p.kind || "event";
+          case "inference.started": return "loop opened " + (p.model || "");
+          case "inference.completed": return "loop closed" + (p.totalTokens ? " " + p.totalTokens + " tok" : "");
+          case "context_update.started": return "context " + (p.content || "").slice(0, 60);
+          case "context_update.completed": return "context ready";
+          case "model.answer": return (p.text || "").replace(/[#*`]/g, "").replace(/\s+/g, " ").slice(0, 110);
+          case "guardrail.pending": return (p.action || "") + " -> " + String(p.target || "").slice(0, 18) + " needs approval";
+          case "guardrail.decision": return (p.decision || "") + " by " + (p.by || "");
+          case "correlation.found": return (p.pattern || "").slice(0, 90);
+          case "message.sent": return (p.message || "").slice(0, 90);
+          case "participant.joined": return "joined";
+          case "participant.left": return "left";
+          default: return env.type;
+        }
+      }
+
+      function tone(env, heartbeat) {
+        const p = env.payload || {};
+        if (heartbeat) return "faint";
+        if (env.type === "chain.event") {
+          const sev = severityFor(p.kind, p.amountSol || 0);
+          return sev === "high" ? "high" : sev === "medium" ? "medium" : "faint";
+        }
+        if (env.type === "guardrail.pending") return "medium";
+        if (env.type === "guardrail.decision" || env.type === "message.sent") return "cool";
+        return "normal";
+      }
+
+      function ingest(env) {
+        if (!env || HIDDEN.indexOf(env.producer) !== -1) return;
+        const p = env.payload || {};
+        st.events++;
+        if (typeof env.seq === "number") st.seq = env.seq;
+        if (typeof env.inflight === "number") {
+          st.inflight = env.inflight;
+          if (env.inflight > st.peak) st.peak = env.inflight;
+        }
+        st.lastEmit[env.producer] = Date.now();
+        if (env.type === "inference.started") st.perProducer[env.producer] = (st.perProducer[env.producer] || 0) + 1;
+        if (env.type === "inference.completed") st.perProducer[env.producer] = Math.max(0, (st.perProducer[env.producer] || 0) - 1);
+
+        const heartbeat = env.type === "chain.event" && p.kind === "normal";
+        const line = describe(env);
+        const lane = st.laneEvents[env.producer];
+        if (lane && (!heartbeat || lane.length === 0 || Date.now() - (lane[0].at || 0) > 2600)) {
+          lane.unshift({
+            at: Date.now(), t: hhmmss(env.ts), faint: heartbeat,
+            type: env.type.replace("chain.", "").replace("inference.", "inf.").replace("context_update.", "ctx."),
+            text: line,
+          });
+          if (lane.length > 3) lane.length = 3;
+        }
+        st.log.push({ t: hhmmss(env.ts), type: env.type, producer: env.producer, text: line, tone: tone(env, heartbeat) });
+        if (st.log.length > 400) st.log.splice(0, st.log.length - 400);
+
+        spawnFor(env, heartbeat);
+        derive(env, heartbeat);
+        dirty = true;
+        if (logOpen && !logHeld) requestAnimationFrame(scrollLog);
+      }
+
+      function derive(env, heartbeat) {
+        const p = env.payload || {};
+        if (env.type === "guardrail.pending" && p.pendingId) {
+          if (!st.pending.some((x) => x.pendingId === p.pendingId)) {
+            st.pending.push({ pendingId: p.pendingId, incidentId: p.incidentId, action: p.action, target: p.target, reason: p.reason, ts: env.ts });
           }
-          pendingEl.appendChild(div);
+        }
+        if (env.type === "guardrail.decision" && p.pendingId) {
+          const i = st.pending.findIndex((x) => x.pendingId === p.pendingId);
+          const rec = i >= 0 ? st.pending.splice(i, 1)[0] : null;
+          st.decisions.unshift({
+            pendingId: p.pendingId, incidentId: rec ? rec.incidentId : p.incidentId,
+            decision: p.decision, by: p.by, ts: env.ts,
+            text: rec ? rec.action + " " + rec.target : p.pendingId,
+          });
+          if (st.decisions.length > 20) st.decisions.length = 20;
+        }
+        if (env.type === "correlation.found" && p.id) {
+          if (!st.correlations.some((c) => c.id === p.id)) {
+            st.correlations.unshift({ id: p.id, incidentIds: p.incidentIds || [], pattern: p.pattern, confidence: p.confidence, ts: env.ts });
+          }
+        }
+        if (env.type === "model.answer" && env.producer === "Briefer") {
+          if (p.kind === "operator_answer") {
+            const open = st.qa.find((x) => !x.a);
+            const text = (p.text || "").replace(/[#*`]/g, "");
+            if (open) { open.a = text; } else { st.qa.unshift({ q: "(operator)", a: text, t: hhmmss(env.ts) }); }
+          } else if (p.text) {
+            st.brief = p.text; st.briefTs = env.ts;
+          }
+        }
+        if (env.type === "chain.event" && !heartbeat) {
+          const sev = severityFor(p.kind, p.amountSol || 0);
+          if (sev === "high") shock();
+          if (MOCK) {
+            st.incidents.unshift({
+              id: "INC-" + String(++mockInc), eventId: p.eventId, source: p.source, kind: p.kind,
+              severity: sev, summary: p.detail || describe(env), ts: Date.now(),
+            });
+            if (st.incidents.length > 60) st.incidents.length = 60;
+          }
+        }
+        // Incident ids and severities are the server's; ask it rather than guess.
+        if (!MOCK && (env.type === "model.answer" || (env.type === "chain.event" && !heartbeat) || env.type === "guardrail.decision")) pollSoon();
+      }
+
+      /* ---------------- sphere ---------------- */
+
+      const cv = document.getElementById("sphere");
+      const ctx = cv.getContext("2d", { alpha: false });
+      const SHELLS = [
+        { r: 0.86, n: 1400, crisp: 0.6 },
+        { r: 1.0, n: 2200, crisp: 0.88 },
+        { r: 1.1, n: 700, crisp: 1 },
+      ];
+      const PART_CAP = 2000;
+
+      let shells = [], totalPoints = 0, quality = 1;
+      const act = new Float32Array(NB);
+      let rot = 0, wob = 0, turb = 0, fps = 60;
+      const travellers = [];
+      const shocks = [];
+      let cssW = 0, cssH = 0;
+
+      function buildShells() {
+        shells = SHELLS.map((s) => {
+          const n = Math.max(80, Math.round(s.n * quality));
+          const x = new Float32Array(n), y = new Float32Array(n), z = new Float32Array(n);
+          const band = new Uint8Array(n), jit = new Float32Array(n);
+          const phi = Math.PI * (3 - Math.sqrt(5));
+          for (let i = 0; i < n; i++) {
+            const yy = 1 - (i / (n - 1)) * 2;
+            const rad = Math.sqrt(Math.max(0, 1 - yy * yy));
+            const th = phi * i;
+            x[i] = Math.cos(th) * rad; y[i] = yy; z[i] = Math.sin(th) * rad;
+            const lon = Math.atan2(z[i], x[i]);
+            band[i] = Math.floor(((lon + Math.PI) / (Math.PI * 2)) * NB) % NB;
+            jit[i] = Math.random();
+          }
+          return { base: s, n, x, y, z, band, jit };
+        });
+        totalPoints = shells.reduce((a, s) => a + s.n, 0);
+      }
+      buildShells();
+
+      function resize() {
+        const r = cv.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        cv.width = Math.max(1, Math.round(r.width * dpr));
+        cv.height = Math.max(1, Math.round(r.height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cssW = r.width; cssH = r.height;
+      }
+      resize();
+      if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+      else window.addEventListener("resize", resize);
+
+      const bandVec = [];
+      for (let i = 0; i < NB; i++) {
+        const lon = -Math.PI + ((i + 0.5) / NB) * Math.PI * 2;
+        bandVec.push([Math.cos(lon), 0, Math.sin(lon)]);
+      }
+
+      function slerp(a, b, t) {
+        let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        d = Math.max(-1, Math.min(1, d));
+        const th = Math.acos(d);
+        if (th < 1e-4) return a.slice();
+        const s = Math.sin(th);
+        const k0 = Math.sin((1 - t) * th) / s, k1 = Math.sin(t * th) / s;
+        return [a[0] * k0 + b[0] * k1, a[1] * k0 + b[1] * k1, a[2] * k0 + b[2] * k1];
+      }
+
+      function spawnFor(env, heartbeat) {
+        const from = bandOf(env.producer);
+        if (from === undefined) return;
+        const p = env.payload || {};
+        const targets = (FLOW[env.type] || []).map((n) => IDX[n]).filter((i) => i !== undefined);
+
+        let count = heartbeat ? (Math.random() < 0.5 ? 2 : 3) : 60;
+        let bright = heartbeat ? 0.25 : 0.75;
+        if (env.type === "chain.event" && !heartbeat) {
+          const sev = severityFor(p.kind, p.amountSol || 0);
+          count = sev === "high" ? 160 : sev === "medium" ? 110 : 70;
+          bright = sev === "high" ? 1 : 0.85;
+        }
+        if (env.type === "model.answer") { count = 130; bright = 0.9; }
+        if (env.type === "guardrail.pending") { count = 120; bright = 0.95; }
+        if (env.type === "guardrail.decision") { count = 100; bright = 0.9; }
+        if (env.type === "correlation.found") { count = 140; bright = 0.95; }
+        if (env.type.startsWith("inference.") || env.type.startsWith("context_update.")) { count = 40; bright = 0.5; }
+
+        act[from] = Math.min(1.4, act[from] + (heartbeat ? 0.08 : 0.5));
+        targets.forEach((t) => (act[t] = Math.min(1.4, act[t] + (heartbeat ? 0.03 : 0.22))));
+
+        const a = bandVec[from];
+        for (let i = 0; i < count; i++) {
+          if (travellers.length >= PART_CAP) break;
+          const b = targets.length ? bandVec[pick(targets)] : bandVec[(from + 4) % NB];
+          const lat = rnd(-0.55, 0.55);
+          const av = [a[0], a[1] + lat, a[2]];
+          const bv = [b[0], b[1] + rnd(-0.4, 0.4), b[2]];
+          const la = Math.hypot(av[0], av[1], av[2]), lb = Math.hypot(bv[0], bv[1], bv[2]);
+          travellers.push({
+            a: [av[0] / la, av[1] / la, av[2] / la],
+            b: [bv[0] / lb, bv[1] / lb, bv[2] / lb],
+            t: 0, sp: rnd(0.006, 0.017), b0: bright * rnd(0.55, 1), r: 1.02 + Math.random() * 0.06,
+          });
+        }
+      }
+
+      function shock() { shocks.push({ band: IDX["Risk Analyst"], r: 0.1, a: 0.95 }); }
+
+      const BUCKETS = 12;
+      const bucketX = [], bucketY = [], bucketS = [], bucketN = new Int32Array(BUCKETS);
+      for (let i = 0; i < BUCKETS; i++) { bucketX.push(new Float32Array(6000)); bucketY.push(new Float32Array(6000)); bucketS.push(new Float32Array(6000)); }
+
+      function draw(dt) {
+        if (!cssW || !cssH) return;
+        const w = cssW, h = cssH;
+        const cx = w / 2, cy = h / 2;
+        const R = Math.min(w, h) * 0.4;
+        const F = 2.7;
+
+        const turbTarget = Math.min(1, st.inflight / 3);
+        turb += (turbTarget - turb) * 0.05;
+        rot += (0.0016 + turb * 0.0042) * (dt / 16.7);
+        wob += 0.0009 * (dt / 16.7);
+        const rx = Math.sin(wob) * 0.28;
+
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+
+        for (let i = 0; i < NB; i++) act[i] *= 0.965;
+        for (let i = 0; i < BUCKETS; i++) bucketN[i] = 0;
+
+        const cosY = Math.cos(rot), sinY = Math.sin(rot);
+        const cosX = Math.cos(rx), sinX = Math.sin(rx);
+
+        for (let si = 0; si < shells.length; si++) {
+          const sh = shells[si];
+          const crisp = sh.base.crisp;
+          for (let i = 0; i < sh.n; i++) {
+            const bi = sh.band[i];
+            const a = act[bi];
+            // activity pushes the band outward and brightens it
+            const push = a > 0.01 ? 1 + 0.12 * Math.min(1, a) * (0.55 + sh.jit[i] * 0.75) : 1;
+            const rr = sh.base.r * push;
+            let x = sh.x[i] * rr, y = sh.y[i] * rr, z = sh.z[i] * rr;
+            if (turb > 0.02) {
+              const j = (sh.jit[i] - 0.5) * turb * 0.05;
+              x += j; y += j * 0.6; z -= j;
+            }
+            const x1 = x * cosY + z * sinY;
+            const z1 = -x * sinY + z * cosY;
+            const y2 = y * cosX - z1 * sinX;
+            const z2 = y * sinX + z1 * cosX;
+            const sc = F / (F - z2);
+            const px = cx + x1 * R * sc, py = cy + y2 * R * sc;
+            if (px < -4 || py < -4 || px > w + 4 || py > h + 4) continue;
+            const depth = (z2 / sh.base.r + 1) * 0.5;
+            let alpha = (0.09 + Math.pow(depth, 1.5) * 0.74) * crisp;
+            if (a > 0.01) alpha = Math.min(0.95, alpha + a * 0.42);
+            if (turb > 0.05) alpha = Math.min(0.95, alpha * (1 + turb * 0.25));
+            const bkt = Math.min(BUCKETS - 1, (alpha * BUCKETS) | 0);
+            const n = bucketN[bkt];
+            if (n < 6000) {
+              bucketX[bkt][n] = px; bucketY[bkt][n] = py;
+              bucketS[bkt][n] = depth > 0.72 || sh.jit[i] > 0.93 ? 1.5 : 1;
+              bucketN[bkt] = n + 1;
+            }
+          }
         }
 
-        answersEl.innerHTML =
-          (s.operatorAnswers || []).map((a) => `<div class="ev"><b>Q:</b> ${a.question}<br/><b>A:</b> ${a.answer}</div>`).join("") || "—";
+        for (let bkt = 0; bkt < BUCKETS; bkt++) {
+          const n = bucketN[bkt];
+          if (!n) continue;
+          ctx.fillStyle = "rgba(255,255,255," + (((bkt + 0.5) / BUCKETS) * 0.95).toFixed(3) + ")";
+          const xs = bucketX[bkt], ys = bucketY[bkt], ss = bucketS[bkt];
+          for (let i = 0; i < n; i++) ctx.fillRect(xs[i], ys[i], ss[i], ss[i]);
+        }
+
+        // travelling particles on great-circle arcs
+        for (let i = travellers.length - 1; i >= 0; i--) {
+          const t = travellers[i];
+          t.t += t.sp * (0.7 + turb * 0.8) * (dt / 16.7);
+          if (t.t >= 1) { travellers.splice(i, 1); continue; }
+          const v = slerp(t.a, t.b, t.t);
+          const rr = t.r;
+          const x = v[0] * rr, y = v[1] * rr, z = v[2] * rr;
+          const x1 = x * cosY + z * sinY, z1 = -x * sinY + z * cosY;
+          const y2 = y * cosX - z1 * sinX, z2 = y * sinX + z1 * cosX;
+          const sc = F / (F - z2);
+          const px = cx + x1 * R * sc, py = cy + y2 * R * sc;
+          const depth = (z2 + 1) * 0.5;
+          const fade = Math.sin(t.t * Math.PI);
+          const alpha = Math.min(0.95, t.b0 * fade * (0.25 + depth * 0.75));
+          if (alpha < 0.02) continue;
+          ctx.fillStyle = "rgba(255,255,255," + alpha.toFixed(3) + ")";
+          const s = depth > 0.6 ? 1.5 : 1;
+          ctx.fillRect(px, py, s, s);
+        }
+
+        // the only colour on the canvas
+        for (let i = shocks.length - 1; i >= 0; i--) {
+          const k = shocks[i];
+          k.r += 0.012 * (dt / 16.7); k.a *= 0.982;
+          if (k.a < 0.02 || k.r > 1.9) { shocks.splice(i, 1); continue; }
+          const v = bandVec[k.band];
+          const x1 = v[0] * cosY + v[2] * sinY, z1 = -v[0] * sinY + v[2] * cosY;
+          const y2 = -z1 * sinX, z2 = z1 * cosX;
+          const sc = F / (F - z2);
+          ctx.strokeStyle = "rgba(255,45,45," + k.a.toFixed(3) + ")";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx + x1 * R * sc, cy + y2 * R * sc, k.r * R * 0.5 * sc, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        positionBandLabels(cx, cy, R, F, cosY, sinY, cosX, sinX);
       }
 
-      const refresh = () => api("/api/state").then(renderState);
+      const labelEls = [];
+      (function makeLabels() {
+        const host = document.getElementById("bandLabels");
+        PARTS.forEach((p) => {
+          const el = document.createElement("div");
+          el.className = "band";
+          el.textContent = p.name.toUpperCase();
+          host.appendChild(el);
+          labelEls.push(el);
+        });
+      })();
 
-      const ws = new WebSocket(`ws://${location.host}/ws`);
-      ws.onopen = () => (statusEl.textContent = "connected");
-      ws.onclose = () => (statusEl.textContent = "disconnected");
-      ws.onmessage = (msg) => {
-        const data = JSON.parse(msg.data);
-        if (data.type === "hello") return renderState(data.state);
-        addEvent(data);
-        if (["model.answer", "guardrail.pending", "guardrail.decision", "correlation.found"].includes(data.type)) refresh();
+      function positionBandLabels(cx, cy, R, F, cosY, sinY, cosX, sinX) {
+        for (let i = 0; i < NB; i++) {
+          const v = bandVec[i];
+          const rr = 1.42;
+          const x = v[0] * rr, z = v[2] * rr;
+          const x1 = x * cosY + z * sinY, z1 = -x * sinY + z * cosY;
+          const y2 = -z1 * sinX, z2 = z1 * cosX;
+          const sc = F / (F - z2);
+          const el = labelEls[i];
+          const depth = (z2 + 1) * 0.5;
+          const a = act[i];
+          // Rear labels project onto the centre void; show only the front arc.
+          if (z2 < 0.02) { el.style.opacity = "0"; continue; }
+          const px = cx + x1 * R * sc, py = cy + y2 * R * sc;
+          if (Math.hypot(px - cx, py - cy) < R * 0.62) { el.style.opacity = "0"; continue; }
+          el.style.left = px + "px";
+          el.style.top = py + "px";
+          el.style.opacity = (0.18 + depth * 0.45 + Math.min(0.4, a * 0.5)).toFixed(2);
+          el.style.color = a > 0.25 ? "#fff" : "rgba(255,255,255,0.6)";
+        }
+      }
+
+      let last = performance.now(), slowFrames = 0;
+      function frame(now) {
+        const t0 = performance.now();
+        const dt = Math.min(50, now - last);
+        last = now;
+        draw(dt);
+        const cost = performance.now() - t0;
+        fps = fps * 0.9 + (1000 / Math.max(6, dt)) * 0.1;
+        if (cost > 20) {
+          slowFrames++;
+          if (slowFrames > 8 && quality > 0.3) { quality *= 0.8; buildShells(); slowFrames = 0; }
+        } else if (slowFrames > 0) slowFrames--;
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      /* ---------------- brief markdown ---------------- */
+
+      function renderBrief(md) {
+        if (!md) return '<div class="empty">BRIEFER HAS NOT SPOKEN YET.</div>';
+        const out = [];
+        md.split("\n").forEach((raw) => {
+          const line = raw.trim();
+          if (!line) return;
+          let cls = "p", text = line;
+          if (line.indexOf("### ") === 0) { cls = "h3"; text = line.slice(4); }
+          else if (line.indexOf("## ") === 0) { cls = "h2"; text = line.slice(3); }
+          else if (line.indexOf("# ") === 0) { cls = "h1"; text = line.slice(2); }
+          else if (line.indexOf("- ") === 0) { cls = "li"; text = line.slice(2); }
+          const html = text
+            .split("**")
+            .map((chunk, i) => (chunk ? (i % 2 ? "<b>" + esc(chunk) + "</b>" : esc(chunk)) : ""))
+            .join("");
+          out.push('<div class="' + cls + '">' + html + "</div>");
+        });
+        return out.join("");
+      }
+
+      /* ---------------- render ---------------- */
+
+      const $ = (id) => document.getElementById(id);
+      const linkedIds = () => {
+        const m = {};
+        st.correlations.forEach((c) => (c.incidentIds || []).forEach((id) => (m[id] = true)));
+        return m;
       };
 
-      document.getElementById("drill-single").onclick = () => api("/api/drill", { mode: "single" });
-      document.getElementById("drill-multi").onclick = () => api("/api/drill", { mode: "multi" });
-      document.getElementById("ask").onclick = () => {
-        const input = document.getElementById("question");
-        if (!input.value.trim()) return;
-        api("/api/operator/message", { text: input.value.trim() });
-        input.value = "";
-      };
+      function render() {
+        $("connDot").className = "dot" + (st.connected ? " on" : "");
+        $("connLabel").textContent = (MOCK ? "MOCK" : st.status).toUpperCase();
+        $("uptime").textContent = st.uptimeSeconds + "s";
+        $("budget").textContent = st.budget.used + "/" + st.budget.max;
+        $("rate").textContent = st.analystRate.usedThisMinute + "/" + st.analystRate.max;
+        $("streamStats").innerHTML = (st.watcherStats || [])
+          .map((w) => '<span class="k">' + esc(String(w.name).split(" ")[0].toUpperCase()) + '</span><span class="v">' + w.logs + "</span>")
+          .join("");
 
-      setInterval(refresh, 4000);
-      refresh();
+        $("inflight").textContent = st.inflight;
+        $("peak").textContent = st.peak;
+        $("ptLabel").textContent = totalPoints;
+        $("prtLabel").textContent = travellers.length;
+        $("fpsLabel").textContent = Math.round(fps);
+        $("seqLabel").textContent = st.seq;
+        $("evLabel").textContent = st.events;
+        $("turbLabel").textContent = turb.toFixed(2);
+
+        const now = Date.now();
+        $("lanes").innerHTML = PARTS.map((p) => {
+          const n = st.perProducer[p.name] || 0;
+          const recent = now - (st.lastEmit[p.name] || 0) < 2000;
+          const live = p.cls === "agent" ? n > 0 : recent;
+          const evs = st.laneEvents[p.name] || [];
+          const label = p.cls === "agent" ? (n > 0 ? n + " IN FLIGHT" : "IDLE") : recent ? "ACTIVE" : "";
+          return (
+            '<div class="lane' + (live ? " live" : "") + (n > 0 ? " busy" : "") + '">' +
+            '<div class="top"><span class="dot' + (live ? (p.name === "Operator" ? " on cool" : " on") : "") + '"></span>' +
+            '<span class="nm">' + esc(p.name.toUpperCase()) + "</span>" +
+            '<span class="tag">' + p.tag + "</span>" +
+            '<span class="cnt">' + label + "</span></div>" +
+            '<div class="evs">' +
+            (evs.length
+              ? evs
+                  .map((e) => '<div class="ev' + (e.faint ? " faint" : "") + '"><span class="ty">' + esc(e.t) + " " + esc(e.type) + '</span><span class="tx">' + esc(e.faint ? "·  heartbeat" : e.text) + "</span></div>")
+                  .join("")
+              : '<div class="ev faint"><span class="tx">NO ACTIVITY</span></div>') +
+            "</div></div>"
+          );
+        }).join("");
+
+        const linked = linkedIds();
+        $("incN").textContent = st.incidents.length;
+        $("incidents").innerHTML = st.incidents.length
+          ? st.incidents
+              .slice(0, 40)
+              .map((i) => {
+                const sev = String(i.severity || "unknown");
+                return (
+                  '<div class="row"><div class="l1">' +
+                  '<span class="sev ' + sev + '">' + sev.toUpperCase() + "</span>" +
+                  '<span class="id">' + esc(i.id || "") + "</span>" +
+                  '<span class="src">' + esc(i.source || i.chain || "") + " · " + esc(i.kind || "") + "</span>" +
+                  (linked[i.id] ? '<span class="linked">LINKED</span>' : "") +
+                  '<span class="when">' + hhmmss(i.ts) + "</span></div>" +
+                  '<div class="txt">' + esc(i.summary || i.reason || "") + "</div></div>"
+                );
+              })
+              .join("")
+          : '<div class="empty">NO INCIDENTS. WATCHERS NOMINAL.</div>';
+
+        $("corN").textContent = st.correlations.length;
+        $("correlations").innerHTML = st.correlations.length
+          ? st.correlations
+              .map(
+                (c) =>
+                  '<div class="row"><div class="l1">' +
+                  '<span class="id">' + esc(c.id || "") + "</span>" +
+                  '<span class="linked">' + esc(String(c.confidence || "").toUpperCase()) + "</span>" +
+                  '<span class="src">' + esc((c.incidentIds || []).join(" + ")) + "</span>" +
+                  '<span class="when">' + hhmmss(c.ts) + "</span></div>" +
+                  '<div class="txt">' + esc(c.pattern || "") + "</div></div>",
+              )
+              .join("")
+          : '<div class="empty">NO PATTERNS ACROSS INCIDENTS YET.</div>';
+
+        $("brief").innerHTML = renderBrief(st.brief);
+        $("briefTs").textContent = st.briefTs ? hhmmss(st.briefTs) : "";
+
+        $("pendN").textContent = st.pending.length;
+        $("pending").innerHTML = st.pending.length
+          ? st.pending
+              .map(
+                (p) =>
+                  '<div class="pend"><div class="act">' + esc(p.action || "") + "</div>" +
+                  '<div class="tgt">' + esc(p.target || "") + "</div>" +
+                  '<div class="rsn">' + esc(p.reason || "") + "</div>" +
+                  '<div class="btns"><button class="ok" data-ok="' + esc(p.pendingId) + '">APPROVE</button>' +
+                  '<button class="no" data-no="' + esc(p.pendingId) + '">REJECT</button>' +
+                  '<span class="when" style="margin-left:auto;font-size:9px;color:var(--lo)">HELD ' + hhmmss(p.ts) + "</span></div></div>",
+              )
+              .join("")
+          : '<div class="empty">NOTHING HELD AT THE GUARDRAIL.</div>';
+
+        $("decided").innerHTML = st.decisions
+          .slice(0, 8)
+          .map(
+            (d) =>
+              '<div class="dec"><span class="w ' + esc(d.decision) + '">' + esc(String(d.decision || "").toUpperCase()) + "</span>" +
+              '<span class="src" style="font-size:9px;color:var(--lo)">' + esc(d.text || d.incidentId || "") + "</span>" +
+              '<span class="m">BY ' + esc(d.by || "") + "</span></div>",
+          )
+          .join("");
+
+        $("qa").innerHTML = st.qa.length
+          ? st.qa
+              .map(
+                (x) =>
+                  '<div class="qa"><div class="q"><i>Q</i> ' + esc(x.q) + "</div>" +
+                  (x.a ? '<div class="a"><i style="color:var(--lo);font-style:normal">A</i> ' + esc(x.a) + "</div>" : '<div class="a" style="color:var(--lo)">…</div>') +
+                  "</div>",
+              )
+              .join("")
+          : '<div class="empty">NO QUESTIONS ASKED.</div>';
+
+        $("logN").textContent = st.log.length;
+        $("log").innerHTML = st.log.length
+          ? st.log
+              .map(
+                (l) =>
+                  '<div class="lg ' + l.tone + '"><span class="t">' + esc(l.t) + '</span><span class="ty">' + esc(l.type) +
+                  '</span><span class="pr">' + esc(l.producer) + '</span><span class="tx">' + esc(l.text) + "</span></div>",
+              )
+              .join("")
+          : '<div class="empty">WAITING FOR ENVELOPES.</div>';
+      }
+
+      function scrollLog() {
+        const el = $("log");
+        if (el) el.scrollTop = el.scrollHeight;
+      }
+
+      setInterval(() => { if (dirty) { dirty = false; render(); scrollLog(); } }, 130);
+      setInterval(() => { if (MOCK) st.uptimeSeconds++; dirty = true; }, 1000);
+
+      /* ---------------- interaction ---------------- */
+
+      document.body.addEventListener("click", (e) => {
+        const ok = e.target.getAttribute && e.target.getAttribute("data-ok");
+        const no = e.target.getAttribute && e.target.getAttribute("data-no");
+        if (ok || no) {
+          const pendingId = ok || no;
+          const decision = ok ? "approved" : "rejected";
+          st.pending = st.pending.filter((p) => p.pendingId !== pendingId);
+          dirty = true;
+          post("/api/guardrail/decision", { pendingId, decision, reason: "decided in the dashboard" }).then(pollSoon);
+        }
+      });
+      $("drill1").onclick = () => post("/api/drill", { mode: "single" }).then(pollSoon);
+      $("drill2").onclick = () => post("/api/drill", { mode: "multi" }).then(pollSoon);
+      function ask() {
+        const el = $("ask");
+        const text = el.value.trim();
+        if (!text) return;
+        st.qa.unshift({ q: text, a: "", t: hhmmss() });
+        el.value = "";
+        dirty = true;
+        post("/api/operator/message", { text });
+      }
+      $("send").onclick = ask;
+      $("ask").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+      $("logHead").onclick = () => {
+        logOpen = !logOpen;
+        $("logPanel").className = logOpen ? "" : "closed";
+        $("chev").textContent = logOpen ? "▾" : "▸";
+      };
+      $("log").addEventListener("scroll", () => {
+        const el = $("log");
+        logHeld = el.scrollTop + el.clientHeight < el.scrollHeight - 24;
+      });
+
+      /* ---------------- mock ---------------- */
+
+      let mockInc = 1000, mockCor = 400, mockPend = 900, mockSeq = 0;
+
+      function emitMock(type, producer, payload, dInflight) {
+        if (dInflight) st.inflight = Math.max(0, st.inflight + dInflight);
+        ingest({ seq: ++mockSeq, ts: new Date().toISOString(), type, producer, producerRole: "agent", inflight: st.inflight, payload });
+      }
+
+      function mockIncident(mode) {
+        const kind = mode === "multi" ? "authority_change" : pick(["failed_burst", "large_transfer", "authority_change"]);
+        const stream = pick(["Jupiter Stream", "Pumpfun Stream"]);
+        const sol = kind === "large_transfer" ? Math.round(rnd(800, 9000)) : Math.round(rnd(10, 400));
+        const detail =
+          kind === "failed_burst" ? "27 failed txs in 40s" : kind === "large_transfer" ? "single hop to a fresh wallet" : "upgrade authority reassigned";
+        const sev = severityFor(kind, sol);
+        const steps = [];
+        steps.push([0, () => emitMock("chain.event", stream, { kind, source: stream, eventId: "EV-" + Math.floor(rnd(10000, 99999)), amountSol: sol, amountUsd: Math.round(sol * 172), detail })]);
+        steps.push([420, () => emitMock("inference.started", "Risk Analyst", { model: "claude-haiku-4-5" }, 1)]);
+        if (mode === "multi") {
+          steps.push([700, () => emitMock("chain.event", stream === "Jupiter Stream" ? "Pumpfun Stream" : "Jupiter Stream", { kind: "failed_burst", source: "other", eventId: "EV-" + Math.floor(rnd(10000, 99999)), amountSol: 0, amountUsd: 0, detail: "41 failed txs in 30s" })]);
+          steps.push([1500, () => emitMock("inference.started", "Correlator", { model: "claude-haiku-4-5" }, 1)]);
+        }
+        steps.push([1700, () => emitMock("model.answer", "Risk Analyst", { kind: "answer", text: "Severity " + sev + ". " + detail + "." })]);
+        steps.push([1900, () => emitMock("inference.completed", "Risk Analyst", { totalTokens: 180 }, -1)]);
+        steps.push([2100, () => { st.budget.used = Math.min(st.budget.max, st.budget.used + 2); emitMock("inference.started", "Briefer", { model: "claude-haiku-4-5" }, 1); }]);
+        if (mode === "multi") {
+          steps.push([2500, () => emitMock("correlation.found", "Correlator", { id: "COR-" + ++mockCor, incidentIds: ["INC-" + mockInc, "INC-" + (mockInc - 1)], pattern: "same funding wallet touched both streams inside 90 seconds", confidence: "high" })]);
+          steps.push([2700, () => emitMock("inference.completed", "Correlator", { totalTokens: 210 }, -1)]);
+        }
+        steps.push([3000, () => emitMock("model.answer", "Briefer", { kind: "answer", text: "## Current picture\n**" + sev.toUpperCase() + "** " + kind.replace("_", " ") + ".\n- " + detail + "\n- " + (sev === "high" ? "Responder is staging a freeze, held at the guardrail" : "No action staged, monitoring only") + "\n\n### Next\n- Operator review inside 2 minutes" })]);
+        steps.push([3200, () => emitMock("inference.completed", "Briefer", { totalTokens: 240 }, -1)]);
+        if (sev !== "low") {
+          const pid = "PND-" + ++mockPend;
+          steps.push([3600, () => emitMock("inference.started", "Responder", { model: "claude-haiku-4-5" }, 1)]);
+          steps.push([4400, () => emitMock("guardrail.pending", "Guardrail", { pendingId: pid, incidentId: "INC-" + mockInc, action: sev === "high" ? "freeze_wallet" : "alert_operator", target: "9xKq..H3TbSy", reason: "irreversible action on a live wallet, needs a human" })]);
+          steps.push([4700, () => emitMock("inference.completed", "Responder", { totalTokens: 190 }, -1)]);
+          steps.push([16000, () => { if (st.pending.some((p) => p.pendingId === pid)) emitMock("guardrail.decision", "Guardrail", { pendingId: pid, decision: sev === "high" ? "approved" : "rejected", by: "auto" }); }]);
+        }
+        steps.forEach(([d, fn]) => setTimeout(fn, d));
+      }
+
+      function startMock() {
+        st.connected = true; st.status = "live (mock)";
+        st.budget = { used: 12, max: 200 };
+        st.analystRate = { usedThisMinute: 1, max: 4 };
+        st.watcherStats = [
+          { name: "Jupiter Stream", logs: 0, failed: 0, sampled: 0, dropped: 0, reconnects: 0 },
+          { name: "Pumpfun Stream", logs: 0, failed: 0, sampled: 0, dropped: 0, reconnects: 0 },
+        ];
+        st.brief = "## Watch summary\nTwo streams nominal. **No open incidents** at session start.\n- Jupiter Stream sampling at full rate\n- Pumpfun Stream sampling at full rate";
+        st.briefTs = new Date().toISOString();
+        setInterval(() => {
+          const s = pick(["Jupiter Stream", "Pumpfun Stream"]);
+          emitMock("chain.event", s, { kind: "normal", source: s, eventId: "EV-" + Math.floor(rnd(10000, 99999)), detail: "heartbeat" });
+          const w = st.watcherStats.find((x) => x.name === s);
+          if (w) w.logs++;
+        }, 620);
+        setTimeout(() => mockIncident("single"), 1500);
+        (function loop() { setTimeout(() => { mockIncident(Math.random() < 0.3 ? "multi" : "single"); loop(); }, rnd(9000, 15000)); })();
+      }
+
+      if (MOCK) startMock(); else connect();
+      render();
     </script>
   </body>
 </html>

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Watchtower — test page</title>
+    <style>
+      body { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 16px; background: #111; color: #ddd; }
+      h1 { font-size: 15px; margin: 0 0 12px; }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #888; margin: 16px 0 6px; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+      #events { height: 60vh; overflow: auto; border: 1px solid #333; padding: 8px; background: #0b0b0b; }
+      .ev { border-bottom: 1px solid #1e1e1e; padding: 2px 0; white-space: pre-wrap; word-break: break-word; }
+      .t { color: #6cf; } .p { color: #9d7; } .k { color: #fa6; }
+      #brief { border: 1px solid #333; padding: 8px; background: #0b0b0b; min-height: 60px; white-space: pre-wrap; }
+      .pending { border: 1px solid #553; padding: 6px; margin-bottom: 6px; background: #161206; }
+      button { font: inherit; background: #222; color: #ddd; border: 1px solid #444; padding: 3px 8px; cursor: pointer; }
+      button:hover { background: #2c2c2c; }
+      input { font: inherit; background: #0b0b0b; color: #ddd; border: 1px solid #444; padding: 4px; width: 70%; }
+      #status { color: #888; }
+    </style>
+  </head>
+  <body>
+    <h1>Watchtower <span id="status">connecting…</span></h1>
+
+    <div>
+      <button id="drill-single">Drill single</button>
+      <button id="drill-multi">Drill multi</button>
+      <span id="meta"></span>
+    </div>
+
+    <div class="cols">
+      <div>
+        <h2>Events</h2>
+        <div id="events"></div>
+      </div>
+      <div>
+        <h2>Brief</h2>
+        <div id="brief">—</div>
+
+        <h2>Pending approvals</h2>
+        <div id="pending">none</div>
+
+        <h2>Ask the briefer</h2>
+        <div>
+          <input id="question" placeholder="what happened in the drill?" />
+          <button id="ask">Send</button>
+        </div>
+
+        <h2>Operator answers</h2>
+        <div id="answers">—</div>
+      </div>
+    </div>
+
+    <script>
+      const api = (path, body) =>
+        fetch(path, {
+          method: body ? "POST" : "GET",
+          headers: { "content-type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined,
+        }).then((r) => r.json());
+
+      const eventsEl = document.getElementById("events");
+      const briefEl = document.getElementById("brief");
+      const pendingEl = document.getElementById("pending");
+      const answersEl = document.getElementById("answers");
+      const metaEl = document.getElementById("meta");
+      const statusEl = document.getElementById("status");
+
+      function addEvent(e) {
+        const div = document.createElement("div");
+        div.className = "ev";
+        const kind = e.payload && e.payload.kind ? ` [${e.payload.kind}]` : "";
+        const body = JSON.stringify(e.payload).slice(0, 220);
+        div.innerHTML =
+          `<span class="t">${e.ts.slice(11, 19)}</span> ` +
+          `<span class="k">${e.type}</span>${kind} ` +
+          `<span class="p">${e.producer}</span> (inflight ${e.inflight}) ${body}`;
+        eventsEl.appendChild(div);
+        while (eventsEl.children.length > 600) eventsEl.removeChild(eventsEl.firstChild);
+        eventsEl.scrollTop = eventsEl.scrollHeight;
+      }
+
+      function renderState(s) {
+        briefEl.textContent = s.brief || "—";
+        metaEl.textContent =
+          ` budget ${s.budget.used}/${s.budget.max} · analyst ${s.analystRate.usedThisMinute}/${s.analystRate.max}/min` +
+          ` · up ${s.uptimeSeconds}s · ` +
+          (s.watcherStats || []).map((w) => `${w.name}: ${w.logs} logs`).join(" · ");
+
+        pendingEl.innerHTML = "";
+        if (!s.pendingApprovals.length) pendingEl.textContent = "none";
+        for (const p of s.pendingApprovals) {
+          const div = document.createElement("div");
+          div.className = "pending";
+          div.innerHTML = `<b>${p.pendingId}</b> ${p.action} → ${p.target}<br/><i>${p.reason}</i><br/>`;
+          for (const decision of ["approved", "rejected"]) {
+            const b = document.createElement("button");
+            b.textContent = decision === "approved" ? "Approve" : "Reject";
+            b.onclick = () => api("/api/guardrail/decision", { pendingId: p.pendingId, decision }).then(refresh);
+            div.appendChild(b);
+          }
+          pendingEl.appendChild(div);
+        }
+
+        answersEl.innerHTML =
+          (s.operatorAnswers || []).map((a) => `<div class="ev"><b>Q:</b> ${a.question}<br/><b>A:</b> ${a.answer}</div>`).join("") || "—";
+      }
+
+      const refresh = () => api("/api/state").then(renderState);
+
+      const ws = new WebSocket(`ws://${location.host}/ws`);
+      ws.onopen = () => (statusEl.textContent = "connected");
+      ws.onclose = () => (statusEl.textContent = "disconnected");
+      ws.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        if (data.type === "hello") return renderState(data.state);
+        addEvent(data);
+        if (["model.answer", "guardrail.pending", "guardrail.decision", "correlation.found"].includes(data.type)) refresh();
+      };
+
+      document.getElementById("drill-single").onclick = () => api("/api/drill", { mode: "single" });
+      document.getElementById("drill-multi").onclick = () => api("/api/drill", { mode: "multi" });
+      document.getElementById("ask").onclick = () => {
+        const input = document.getElementById("question");
+        if (!input.value.trim()) return;
+        api("/api/operator/message", { text: input.value.trim() });
+        input.value = "";
+      };
+
+      setInterval(refresh, 4000);
+      refresh();
+    </script>
+  </body>
+</html>

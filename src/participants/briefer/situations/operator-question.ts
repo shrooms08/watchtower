@@ -83,7 +83,9 @@ export class AnswerQuestionProcessor extends SafeProcessor {
 
 		runLoop(
 			agent.getId(),
-			`Operator asks: ${question}\n\nCurrent state: ${JSON.stringify(snapshot)}`,
+			`Operator asks: ${question}\n\nCurrent state: ${JSON.stringify(snapshot)}\n\n` +
+				"Use only facts present in the state. Do not infer outcomes, success, or failure that the state does not record. " +
+				"If unsure, say the state does not show it.",
 			isolatedInput(agent, MODEL_BRIEFER, 220),
 		);
 	}

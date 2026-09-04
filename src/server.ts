@@ -23,8 +23,8 @@ import { EnvironmentState, initializeRuntime, join, resolveRuntime, sendEvent, s
 import { history, subscribe, type Envelope } from "./stream";
 
 const PORT = Number(process.env.PORT ?? 4400);
-const BUDGET = Number(process.env.SERVE_BUDGET ?? 60);
-const ANALYST_PER_MIN = Number(process.env.ANALYST_PER_MIN ?? 6);
+const BUDGET = Number(process.env.SERVE_BUDGET ?? 200);
+const ANALYST_PER_MIN = Number(process.env.ANALYST_PER_MIN ?? 4);
 
 const state = EnvironmentState.create(BUDGET, ANALYST_PER_MIN);
 initializeRuntime({ state });
@@ -210,6 +210,14 @@ const server = createServer((request, response) => {
 
 			if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
 				const page = await readFile(joinPath(process.cwd(), "public", "index.html"), "utf8");
+
+				response.writeHead(200, { ...CORS, "content-type": "text/html; charset=utf-8" });
+				response.end(page);
+				return;
+			}
+
+			if (request.method === "GET" && url.pathname === "/debug") {
+				const page = await readFile(joinPath(process.cwd(), "public", "debug.html"), "utf8");
 
 				response.writeHead(200, { ...CORS, "content-type": "text/html; charset=utf-8" });
 				response.end(page);

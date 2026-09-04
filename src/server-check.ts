@@ -16,6 +16,14 @@ const ANSWER_TIMEOUT_MS = 30_000;
 const received: Envelope[] = [];
 const failures: string[] = [];
 
+/**
+ * The server replays its ring buffer on connect, so every assertion has to
+ * ignore anything that happened before this run: otherwise a matching envelope
+ * from an earlier session satisfies the wait instantly and the check passes
+ * without testing anything.
+ */
+let baselineSeq = 0;
+
 const api = async (path: string, body?: unknown): Promise<any> => {
 	const response = await fetch(`${BASE}${path}`, {
 		method: body ? "POST" : "GET",
@@ -45,7 +53,29 @@ async function waitFor(label: string, predicate: () => boolean, timeoutMs: numbe
 	return false;
 }
 
-const seen = (predicate: (envelope: Envelope) => boolean): boolean => received.some(predicate);
+/** Polls /api/state: the server records an answer a beat after broadcasting it. */
+async function waitForState(label: string, predicate: (state: any) => boolean, timeoutMs: number): Promise<any> {
+	const deadline = Date.now() + timeoutMs;
+	let latest: any = {};
+
+	while (Date.now() < deadline) {
+		latest = (await api("/api/state")).json;
+
+		if (predicate(latest)) {
+			console.log(`  ok   ${label}`);
+			return latest;
+		}
+
+		await sleep(500);
+	}
+
+	console.error(`  FAIL ${label} (waited ${timeoutMs / 1000}s)`);
+	failures.push(label);
+	return latest;
+}
+
+const seen = (predicate: (envelope: Envelope) => boolean): boolean =>
+	received.some((envelope) => envelope.seq > baselineSeq && predicate(envelope));
 
 const socket = new WebSocket(`ws://localhost:${PORT}/ws`);
 
@@ -67,7 +97,10 @@ socket.on("message", (raw) => {
 	}
 });
 
-console.log("CHECK: connected to /ws");
+// Let the replayed history arrive, then draw the line under it.
+await sleep(1_500);
+baselineSeq = received.reduce((max, envelope) => Math.max(max, envelope.seq), 0);
+console.log(`CHECK: connected to /ws, ignoring ${received.length} replayed envelopes (baseline seq ${baselineSeq})`);
 
 const before = await api("/api/state");
 const briefBefore = String(before.json.brief ?? "");
@@ -93,7 +126,7 @@ await waitFor(
 	Math.max(5_000, CHAIN_TIMEOUT_MS - (Date.now() - startedAt)),
 );
 
-const pendingEnvelope = received.find((e) => e.type === "guardrail.pending");
+const pendingEnvelope = received.find((e) => e.seq > baselineSeq && e.type === "guardrail.pending");
 const pendingId = pendingEnvelope ? String((pendingEnvelope.payload as { pendingId?: string }).pendingId ?? "") : "";
 
 if (!pendingId) {
@@ -131,17 +164,19 @@ await waitFor(
 	ANSWER_TIMEOUT_MS,
 );
 
-const after = await api("/api/state");
-const answers = after.json.operatorAnswers ?? [];
+const after = await waitForState(
+	"operatorAnswer recorded in /api/state",
+	(s) => (s.operatorAnswers ?? []).length > answersBefore,
+	20_000,
+);
+const answers = after.operatorAnswers ?? [];
 const answerText = answers.length > 0 ? String(answers[answers.length - 1].answer) : "";
 
-if (answers.length <= answersBefore) {
-	failures.push("no operatorAnswer was recorded in /api/state");
-} else {
-	console.log(`  ok   operatorAnswer recorded: ${answerText.replace(/\s+/g, " ").slice(0, 100)}`);
+if (answers.length > answersBefore) {
+	console.log(`       ${answerText.replace(/\s+/g, " ").slice(0, 100)}`);
 }
 
-const briefAfter = String(after.json.brief ?? "");
+const briefAfter = String(after.brief ?? "");
 
 if (answerText && briefAfter.trim() === answerText.trim()) {
 	failures.push("state.brief was overwritten with the operator answer");
