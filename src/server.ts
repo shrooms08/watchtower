@@ -15,7 +15,7 @@ import { briefer } from "./participants/briefer";
 import { correlator } from "./participants/correlator";
 import { guardrail } from "./participants/guardrail";
 import { observer } from "./participants/observer";
-import { operator } from "./participants/operator";
+import { operator, recordOperatorDecision } from "./participants/operator";
 import { responder } from "./participants/responder";
 import { createSolanaWatcher, SolanaWatcher, WATCHER_DEFAULTS } from "./participants/solana-watcher";
 import { uiObserver } from "./participants/ui-observer";
@@ -260,25 +260,19 @@ const server = createServer((request, response) => {
 					return;
 				}
 
-				const pending = state.getPending(pendingId);
-
-				if (!pending) {
+				if (!state.getPending(pendingId)) {
 					sendJson(response, 404, { ok: false, error: `unknown pendingId ${pendingId}` });
 					return;
 				}
 
-				// Same path the Operator's /approve message uses: record it, and the
-				// waiting interceptor picks it up on its next poll.
-				const recorded = state.resolvePending({
-					pendingId: pending.pendingId,
-					incidentId: pending.incidentId,
+				// Same path the Operator's /approve message uses.
+				const result = recordOperatorDecision(
+					pendingId,
 					decision,
-					by: "operator",
-					ts: new Date().toISOString(),
-					note: typeof body.reason === "string" && body.reason ? body.reason : "decided in the UI",
-				});
+					typeof body.reason === "string" && body.reason ? body.reason : "decided in the UI",
+				);
 
-				sendJson(response, 200, { ok: true, alreadyDecided: !recorded });
+				sendJson(response, 200, { ok: true, alreadyDecided: !result.ok && result.reason === "already decided" });
 				return;
 			}
 

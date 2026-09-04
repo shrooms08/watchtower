@@ -6,6 +6,29 @@ import { resolveRuntime, runLoop } from "../../runtime";
 /** At most one brief every 8s; anything arriving inside the window coalesces. */
 export const BRIEFER_MIN_INTERVAL_MS = 8_000;
 
+/**
+ * The Briefer runs two kinds of loop and model.answer carries no loop id, so the
+ * reply itself has to say which it is. Queue position is the fallback, not the
+ * mechanism (MOZAIK-NOTES.md).
+ */
+export const BRIEF_MARKER = "BRIEF:";
+export const ANSWER_MARKER = "ANSWER:";
+
+/** Returns the marker found and the text with it removed. */
+export function readMarker(text: string): { kind: "brief" | "answer" | undefined; text: string } {
+	const trimmed = text.trim();
+
+	if (trimmed.toUpperCase().startsWith(BRIEF_MARKER)) {
+		return { kind: "brief", text: trimmed.slice(BRIEF_MARKER.length).trim() };
+	}
+
+	if (trimmed.toUpperCase().startsWith(ANSWER_MARKER)) {
+		return { kind: "answer", text: trimmed.slice(ANSWER_MARKER.length).trim() };
+	}
+
+	return { kind: undefined, text: trimmed };
+}
+
 /** At most one pending catch-up timer, and the agent to run it with. */
 let pendingRerun: ReturnType<typeof setTimeout> | undefined;
 let lastAgent: Agent | undefined;
@@ -134,7 +157,11 @@ export function runBrief(agent: Agent, lead: string): void {
 	const message =
 		`${lead}\n` +
 		`State: ${JSON.stringify(payload)}\n` +
-		`Rewrite the ops brief in under ${limit} words, grouped by source stream. ${addenda.join(" ")}`.trim();
+		`Rewrite the ops brief in under ${limit} words, grouped by source stream. ${addenda.join(" ")} ` +
+		"Report severities exactly as recorded by the Analyst; do not escalate. Describe congestion as congestion. " +
+		"Use 'attack' only if an incident reason or correlation pattern already uses it. " +
+		"Keep the operator's decisions verbatim (approved/rejected). " +
+		`Begin your reply with "${BRIEF_MARKER}".`.trim();
 
 	runLoop(agent.getId(), message, isolatedInput(agent, MODEL_BRIEFER, 260));
 }

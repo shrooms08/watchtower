@@ -9,7 +9,7 @@ import {
 } from "@mozaik-ai/core";
 import { isChainEventPayload } from "../../../chain-event";
 import { isCorrelationFoundPayload } from "../../../correlation";
-import { isGuardrailDecisionPayload, isGuardrailPendingPayload } from "../../../guardrail-events";
+import { isGuardrailDecisionPayload, isGuardrailPendingPayload, isOperatorDecisionPayload } from "../../../guardrail-events";
 import { resolveParticipant, resolveRuntime } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
 
@@ -93,6 +93,13 @@ function describe(event: SemanticEvent): string {
 			}
 
 			return `CORRELATION ${payload.id} [${payload.confidence}] ${payload.incidentIds.join(" + ")}: ${payload.pattern}`;
+		}
+		case "operator.decision": {
+			if (!isOperatorDecisionPayload(payload)) {
+				return `UNKNOWN SHAPE payload=${JSON.stringify(payload)}`;
+			}
+
+			return `OPERATOR ${payload.decision.toUpperCase()} ${payload.incidentId} (${payload.pendingId})`;
 		}
 		case "guardrail.pending": {
 			if (!isGuardrailPendingPayload(payload)) {

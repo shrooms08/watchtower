@@ -1,7 +1,7 @@
 import { Agent, ModelMessageItem, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { resolveRuntime } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
-import { runBrief } from "../brief";
+import { readMarker, runBrief } from "../brief";
 
 export class OwnAnswerSpecification extends SafeSpecification {
 	protected evaluate(context: SituationContext): boolean {
@@ -13,13 +13,22 @@ export class StoreBriefProcessor extends SafeProcessor {
 	protected run(context: SituationContext): void {
 		const { answer } = context.event.payload as { answer: ModelMessageItem };
 		const state = resolveRuntime().state;
-		const text = answer.content.text.trim();
+		const marked = readMarker(answer.content.text);
+		const text = marked.text;
 
-		// A pending question claims this answer: it is a reply to the operator,
-		// never the rolling brief, so state.brief is left alone.
-		const question = state.pendingOperatorQuestions.shift();
+		// The reply says which loop it came from. Queue position is only the
+		// fallback, because concurrent loops finish out of order.
+		let isAnswer = marked.kind === "answer";
 
-		if (question !== undefined) {
+		if (marked.kind === undefined) {
+			isAnswer = state.pendingOperatorQuestions.length > 0;
+			console.log(`[briefer] unmarked answer, fell back to queue (${isAnswer ? "answer" : "brief"})`);
+			state.unmarkedAnswerCount++;
+		}
+
+		if (isAnswer) {
+			const question = state.pendingOperatorQuestions.shift() ?? "(operator)";
+
 			state.operatorAnswers.push({ question, answer: text, ts: new Date().toISOString() });
 			console.log(`[briefer] answered operator: ${text.replace(/\s+/g, " ")}`);
 			return;

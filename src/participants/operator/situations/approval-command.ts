@@ -1,5 +1,5 @@
 import { SituationContext, SituationHandler } from "@mozaik-ai/core";
-import { resolveRuntime } from "../../../runtime";
+import { recordOperatorDecision } from "../index";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
 
 const APPROVE = /^\/approve (\S+)/;
@@ -46,26 +46,16 @@ export class ApprovalCommandProcessor extends SafeProcessor {
 			return;
 		}
 
-		const state = resolveRuntime().state;
-		const pending = state.getPending(command.pendingId);
+		// Same helper the HTTP endpoint uses: emits operator.decision, then
+		// records the decision the interceptor polls for.
+		const result = recordOperatorDecision(
+			command.pendingId,
+			command.decision,
+			`operator /${command.decision === "approved" ? "approve" : "reject"}`,
+		);
 
-		if (!pending) {
-			console.warn(`[operator] no pending approval ${command.pendingId}`);
-			return;
-		}
-
-		// The interceptor polls shared state, so recording here settles its wait.
-		const recorded = state.resolvePending({
-			pendingId: pending.pendingId,
-			incidentId: pending.incidentId,
-			decision: command.decision,
-			by: "operator",
-			ts: new Date().toISOString(),
-			note: `operator /${command.decision === "approved" ? "approve" : "reject"}`,
-		});
-
-		if (!recorded) {
-			console.warn(`[operator] ${command.pendingId} was already decided`);
+		if (!result.ok) {
+			console.warn(`[operator] ${command.pendingId}: ${result.reason}`);
 			return;
 		}
 

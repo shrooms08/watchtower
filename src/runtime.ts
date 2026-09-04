@@ -115,6 +115,7 @@ export class EnvironmentState extends RuntimeState {
 	/** Infinity outside the server: the scripts are bounded by the budget alone. */
 	analystPerMin = Number.POSITIVE_INFINITY;
 	analystRateLimitedCount = 0;
+	unmarkedAnswerCount = 0;
 	/**
 	 * Set by whoever owns the watcher handles (the server). Kept as a function so
 	 * the runtime never has to import the watcher module.

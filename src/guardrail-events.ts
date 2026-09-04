@@ -19,6 +19,28 @@ export type GuardrailDecisionPayload = {
 	ts: string;
 };
 
+export type OperatorDecisionPayload = {
+	pendingId: string;
+	incidentId: string;
+	decision: "approved" | "rejected";
+	ts: string;
+};
+
+export function isOperatorDecisionPayload(value: unknown): value is OperatorDecisionPayload {
+	if (typeof value !== "object" || value === null) {
+		return false;
+	}
+
+	const candidate = value as Record<string, unknown>;
+
+	return (
+		typeof candidate.pendingId === "string" &&
+		typeof candidate.incidentId === "string" &&
+		(candidate.decision === "approved" || candidate.decision === "rejected") &&
+		typeof candidate.ts === "string"
+	);
+}
+
 export function isGuardrailPendingPayload(value: unknown): value is GuardrailPendingPayload {
 	if (typeof value !== "object" || value === null) {
 		return false;

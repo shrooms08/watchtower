@@ -7,7 +7,8 @@ export const responder = createAgent({
 	name: "Responder",
 	capabilities: ["request_actions"],
 	instruction:
-		"You are an incident responder for a crypto protocol. For every high severity incident you MUST call execute_action exactly once with the most proportionate action, then reply with one sentence stating what you requested and its outcome.",
+		"You are an incident responder for a crypto protocol. For every high severity incident you MUST call execute_action exactly once with the most proportionate action, " +
+		"then reply with ONE sentence under 25 words stating what you requested and whether it was executed or rejected.",
 	tools: [executeAction],
 	handlers: [highSeverityHandler, ownAnswerHandler],
 });

@@ -272,6 +272,7 @@
         "correlation.found": ["Briefer"],
         "guardrail.pending": ["Operator", "Briefer"],
         "guardrail.decision": ["Responder", "Briefer"],
+        "operator.decision": ["Responder", "Briefer"],
         "message.sent": ["Briefer"],
         "function_call.started": ["Guardrail"],
         "function_call.completed": ["Briefer"],
@@ -403,6 +404,7 @@
           case "model.answer": return (p.text || "").replace(/[#*`]/g, "").replace(/\s+/g, " ").slice(0, 110);
           case "guardrail.pending": return (p.action || "") + " -> " + String(p.target || "").slice(0, 18) + " needs approval";
           case "guardrail.decision": return (p.decision || "") + " by " + (p.by || "");
+          case "operator.decision": return (p.decision || "") + " " + (p.incidentId || "");
           case "correlation.found": return (p.pattern || "").slice(0, 90);
           case "message.sent": return (p.message || "").slice(0, 90);
           case "participant.joined": return "joined";
@@ -419,7 +421,7 @@
           return sev === "high" ? "high" : sev === "medium" ? "medium" : "faint";
         }
         if (env.type === "guardrail.pending") return "medium";
-        if (env.type === "guardrail.decision" || env.type === "message.sent") return "cool";
+        if (env.type === "guardrail.decision" || env.type === "message.sent" || env.type === "operator.decision") return "cool";
         return "normal";
       }
 

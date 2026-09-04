@@ -1,7 +1,8 @@
 import { SemanticEvent, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { isChainEventPayload } from "../../../chain-event";
 import { isCorrelationFoundPayload } from "../../../correlation";
-import { isGuardrailDecisionPayload, isGuardrailPendingPayload } from "../../../guardrail-events";
+import { readMarker } from "../../briefer/brief";
+import { isGuardrailDecisionPayload, isGuardrailPendingPayload, isOperatorDecisionPayload } from "../../../guardrail-events";
 import { resolveParticipant, resolveRuntime } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
 import { nextSeq, publishEnvelope } from "../../../stream";
@@ -108,13 +109,19 @@ function payloadFor(event: SemanticEvent): Record<string, unknown> {
 
 	if (event.type === "model.answer") {
 		const answer = (event.payload as { answer?: { content?: { text?: string } } })?.answer;
-		const text = answer?.content?.text ?? "";
-		const state = resolveRuntime().state;
-		// A question answer is claimed by the pending queue before the brief
-		// handler sees it, so the marker has to be derived the same way.
-		const kind = state.pendingOperatorQuestions.length > 0 ? "operator_answer" : "answer";
+		const raw = answer?.content?.text ?? "";
+		const marked = readMarker(raw);
+		// The reply's own marker decides this, not queue position.
+		const kind =
+			marked.kind === "answer"
+				? "operator_answer"
+				: marked.kind === "brief"
+					? "answer"
+					: resolveRuntime().state.pendingOperatorQuestions.length > 0
+						? "operator_answer"
+						: "answer";
 
-		return { kind, text: truncate(text, MAX_STRING) };
+		return { kind, text: truncate(marked.text, MAX_STRING) };
 	}
 
 	if (event.type === "chain.event" && isChainEventPayload(event.payload)) {
@@ -123,6 +130,10 @@ function payloadFor(event: SemanticEvent): Record<string, unknown> {
 
 	if (event.type === "correlation.found" && isCorrelationFoundPayload(event.payload)) {
 		return { kind: "correlation", ...(sanitize(event.payload) as Record<string, unknown>) };
+	}
+
+	if (event.type === "operator.decision" && isOperatorDecisionPayload(event.payload)) {
+		return { kind: "operator_decision", ...(sanitize(event.payload) as Record<string, unknown>) };
 	}
 
 	if (event.type === "guardrail.pending" && isGuardrailPendingPayload(event.payload)) {

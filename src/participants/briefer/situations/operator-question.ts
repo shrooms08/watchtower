@@ -1,5 +1,6 @@
 import { Agent, SituationContext, SituationHandler } from "@mozaik-ai/core";
 import { isolatedInput } from "../../../agent-context";
+import { ANSWER_MARKER } from "../brief";
 import { MODEL_BRIEFER } from "../../../models";
 import { resolveRuntime, runLoop } from "../../../runtime";
 import { SafeProcessor, SafeSpecification } from "../../../safe";
@@ -85,7 +86,8 @@ export class AnswerQuestionProcessor extends SafeProcessor {
 			agent.getId(),
 			`Operator asks: ${question}\n\nCurrent state: ${JSON.stringify(snapshot)}\n\n` +
 				"Use only facts present in the state. Do not infer outcomes, success, or failure that the state does not record. " +
-				"If unsure, say the state does not show it.",
+				"If unsure, say the state does not show it. " +
+				`Begin your reply with "${ANSWER_MARKER}".`,
 			isolatedInput(agent, MODEL_BRIEFER, 220),
 		);
 	}
