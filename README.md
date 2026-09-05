@@ -16,7 +16,7 @@ Judging? Start with [JUDGES.md](JUDGES.md), a five-minute guide.
 
 ![Watchtower dashboard](docs/dashboard.png)
 
-Demo video (2 min): https://youtu.be/0h10sONDl0w
+Demo video (5 min): https://youtu.be/0h10sONDl0w
 
 Submitted to the JigJoy Mozaik Hackathon, September 2026.
 
