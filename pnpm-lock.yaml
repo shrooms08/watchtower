@@ -17,6 +17,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
       ws:
         specifier: ^8.21.3
         version: 8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -27,9 +30,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.13
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

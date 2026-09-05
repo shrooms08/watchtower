@@ -1,9 +1,10 @@
 {
   "name": "watchtower",
   "version": "1.0.0",
-  "description": "",
+  "description": "A live security ops room for on-chain protocols, run by concurrent agents on Mozaik.",
   "main": "index.js",
   "scripts": {
+    "start": "tsx src/server.ts",
     "serve": "tsx src/server.ts",
     "check:server": "tsx src/server-check.ts",
     "live": "tsx src/live.ts",
@@ -14,20 +15,23 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "packageManager": "pnpm@10.33.2",
   "dependencies": {
     "@mozaik-ai/core": "4.0.0",
     "@solana/web3.js": "^1.98.4",
     "dotenv": "^17.4.2",
+    "tsx": "^4.23.13",
     "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
     "@types/ws": "^8.18.1",
-    "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },
   "type": "module",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  }
 }

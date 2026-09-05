@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: watchtower
+    env: node
+    plan: free
+    buildCommand: npm i -g pnpm && pnpm install --frozen-lockfile
+    startCommand: pnpm start
+    healthCheckPath: /api/state
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SERVE_BUDGET
+        value: "120"
+      - key: ANALYST_PER_MIN
+        value: "3"
+      - key: GUARDRAIL_MODE
+        value: ui
+      - key: GUARDRAIL_TIMEOUT_MS
+        value: "180000"

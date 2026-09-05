@@ -23,6 +23,10 @@ import { EnvironmentState, initializeRuntime, join, resolveRuntime, sendEvent, s
 import { history, subscribe, type Envelope } from "./stream";
 
 const PORT = Number(process.env.PORT ?? 4400);
+// Render routes to the container's external interface, not loopback.
+const HOST = process.env.HOST ?? "0.0.0.0";
+/** One drill per 90s across all callers: a drill costs several inferences. */
+const DRILL_COOLDOWN_MS = Number(process.env.DRILL_COOLDOWN_MS ?? 90_000);
 const BUDGET = Number(process.env.SERVE_BUDGET ?? 200);
 const ANALYST_PER_MIN = Number(process.env.ANALYST_PER_MIN ?? 4);
 
@@ -163,6 +167,8 @@ function runDrill(mode: "single" | "multi"): string[] {
 }
 
 // -- http -------------------------------------------------------------------
+
+let lastDrillAt = 0;
 
 const CORS = {
 	"Access-Control-Allow-Origin": "*",
@@ -310,9 +316,20 @@ const server = createServer((request, response) => {
 			}
 
 			if (request.method === "POST" && url.pathname === "/api/drill") {
+				const sinceLast = Date.now() - lastDrillAt;
+
+				if (sinceLast < DRILL_COOLDOWN_MS) {
+					const retryAfterSeconds = Math.ceil((DRILL_COOLDOWN_MS - sinceLast) / 1000);
+
+					response.writeHead(429, { ...CORS, "content-type": "application/json", "retry-after": String(retryAfterSeconds) });
+					response.end(JSON.stringify({ ok: false, retryAfterSeconds }));
+					return;
+				}
+
 				const body = await readBody(request);
 				const mode = body.mode === "multi" ? "multi" : "single";
 
+				lastDrillAt = Date.now();
 				sendJson(response, 200, { ok: true, mode, eventIds: runDrill(mode) });
 				return;
 			}
@@ -347,11 +364,12 @@ wss.on("connection", (socket: WebSocket) => {
 	socket.on("error", unsubscribe);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
 	console.log(`[serve] models: ${modelSummary()}`);
 	console.log(`[serve] budget=${BUDGET} analystPerMin=${ANALYST_PER_MIN} guardrail=${process.env.GUARDRAIL_MODE}`);
 	console.log(`[serve] guardrail timeout=${Number(process.env.GUARDRAIL_TIMEOUT_MS ?? 120_000) / 1000}s`);
-	console.log(`[serve] http://localhost:${PORT}  ws://localhost:${PORT}/ws`);
+	console.log(`[serve] drill cooldown=${DRILL_COOLDOWN_MS / 1000}s`);
+	console.log(`[serve] listening on ${HOST}:${PORT}  http://localhost:${PORT}  ws://localhost:${PORT}/ws`);
 
 	for (const stream of streams) {
 		stream.start();

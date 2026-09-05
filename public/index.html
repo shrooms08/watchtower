@@ -31,7 +31,7 @@
         font-size: 11px;
         overflow: hidden;
       }
-      #app { height: 100vh; width: 100vw; overflow: hidden; display: grid; grid-template-columns: 100%; grid-template-rows: 52px minmax(0, 1fr) auto; }
+      #app { height: 100vh; width: 100vw; overflow: hidden; display: grid; grid-template-columns: 100%; grid-template-rows: 52px auto minmax(0, 1fr) auto; }
 
       /* header */
       header {
@@ -55,6 +55,16 @@
         background: transparent; border: 1px solid var(--line); padding: 4px 9px; cursor: pointer;
       }
       button:hover { color: #fff; border-color: rgba(255, 255, 255, 0.32); }
+
+      /* budget banner */
+      #banner {
+        display: none; flex: none; padding: 6px 20px; border-bottom: 1px solid rgba(232, 163, 61, 0.35);
+        background: rgba(232, 163, 61, 0.08); color: var(--amber);
+        font-size: 9px; letter-spacing: 0.14em;
+      }
+      #banner.on { display: block; }
+      button[disabled] { opacity: 0.4; cursor: not-allowed; }
+      button[disabled]:hover { color: var(--mid); border-color: var(--line); }
 
       /* main */
       main { display: grid; grid-template-columns: 340px minmax(0, 1fr) 400px; min-height: 0; min-width: 0; overflow: hidden; }
@@ -176,6 +186,10 @@
           <button id="drill2">DRILL MULTI</button>
         </div>
       </header>
+
+      <div id="banner">
+        SESSION BUDGET REACHED. WATCHERS ARE STILL STREAMING; AGENTS WILL RESUME WHEN THE SERVICE RESTARTS.
+      </div>
 
       <main>
         <div class="col left">
@@ -809,6 +823,9 @@
         $("uptime").textContent = st.uptimeSeconds + "s";
         $("budget").textContent = st.budget.used + "/" + st.budget.max;
         $("rate").textContent = st.analystRate.usedThisMinute + "/" + st.analystRate.max;
+
+        const spent = st.budget.max > 0 && st.budget.used >= st.budget.max;
+        $("banner").className = spent ? "on" : "";
         $("streamStats").innerHTML = (st.watcherStats || [])
           .map((w) => '<span class="k">' + esc(String(w.name).split(" ")[0].toUpperCase()) + '</span><span class="v">' + w.logs + "</span>")
           .join("");
@@ -952,8 +969,53 @@
           post("/api/guardrail/decision", { pendingId, decision, reason: "decided in the dashboard" }).then(pollSoon);
         }
       });
-      $("drill1").onclick = () => post("/api/drill", { mode: "single" }).then(pollSoon);
-      $("drill2").onclick = () => post("/api/drill", { mode: "multi" }).then(pollSoon);
+      let drillCooldownTimer = null;
+
+      function coolDrills(seconds) {
+        const buttons = [$("drill1"), $("drill2")];
+        let left = Math.max(1, Math.ceil(seconds));
+
+        clearInterval(drillCooldownTimer);
+
+        const paint = () => {
+          buttons.forEach((b) => {
+            b.disabled = left > 0;
+            b.title = left > 0 ? `Rate limited. Try again in ${left}s.` : "";
+          });
+
+          if (left <= 0) {
+            clearInterval(drillCooldownTimer);
+            drillCooldownTimer = null;
+          }
+
+          left--;
+        };
+
+        paint();
+        drillCooldownTimer = setInterval(paint, 1000);
+      }
+
+      function drill(mode) {
+        if (MOCK) return;
+        fetch(API_URL + "/api/drill", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }),
+        })
+          .then((r) => r.json().then((j) => ({ status: r.status, j })))
+          .then(({ status, j }) => {
+            if (status === 429) {
+              coolDrills(Number(j.retryAfterSeconds) || 90);
+              return;
+            }
+
+            // Its own cooldown starts now, so the button matches the server.
+            coolDrills(90);
+            pollSoon();
+          })
+          .catch(() => {});
+      }
+
+      $("drill1").onclick = () => drill("single");
+      $("drill2").onclick = () => drill("multi");
       function ask() {
         const el = $("ask");
         const text = el.value.trim();
