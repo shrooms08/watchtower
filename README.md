@@ -1,13 +1,3 @@
----
-title: Watchtower
-emoji: 🗼
-colorFrom: gray
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 <h1><img src="public/brand/mark.svg" width="72" align="middle" alt="" /> Watchtower</h1>
 
 A live security ops room for on-chain protocols, run by concurrent agents on Mozaik.
@@ -131,6 +121,8 @@ cp .env.example .env
 | `pnpm check:server` | Drives a running server end to end over HTTP and WebSocket and asserts the whole chain. |
 
 `GUARDRAIL_MODE` is `auto-reject` (default), `auto-approve`, `prompt`, or `ui` when serving. Models are per agent through `MODEL_ANALYST`, `MODEL_BRIEFER`, `MODEL_RESPONDER` and `MODEL_CORRELATOR`.
+
+A Dockerfile is included for anyone who wants to host it.
 
 ## Detectors and guards
 
