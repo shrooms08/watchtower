@@ -5,7 +5,8 @@ Two watchers stream real mainnet activity, four agents grade, link, brief, and r
 
 ## What to look at, in order
 
-1. **The demo video** (link in README). Two minutes, one continuous take on live mainnet.
+1. **The demo video.** One continuous take on live mainnet.
+   Demo video (2 min): https://youtu.be/0h10sONDl0w
 2. **`pnpm proof`** (30 seconds, one API key). Prints measured concurrency: peak inferences in flight, the list of overlapping loops with timestamps, and fails the run if agents ever ran sequentially.
 3. **`pnpm serve` then open http://localhost:4400**. Live streams, the sphere, IN FLIGHT and PEAK, the Guardrail cards. Click DRILL MULTI to replay the Raydium pattern (authority change, then a withdrawal) without waiting for a real exploit.
 4. **`src/participants/`**. One folder per participant. Each agent is a specification (when to fire) plus a processor (what to run). No orchestrator anywhere.
