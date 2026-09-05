@@ -2,6 +2,8 @@
 
 A live security ops room for on-chain protocols, run by concurrent agents on Mozaik.
 
+Judging? Start with [JUDGES.md](JUDGES.md), a five-minute guide.
+
 ![Watchtower dashboard](docs/dashboard.png)
 
 Demo video: (link)
