@@ -1,3 +1,13 @@
+---
+title: Watchtower
+emoji: 🗼
+colorFrom: gray
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 <h1><img src="public/brand/mark.svg" width="72" align="middle" alt="" /> Watchtower</h1>
 
 A live security ops room for on-chain protocols, run by concurrent agents on Mozaik.
